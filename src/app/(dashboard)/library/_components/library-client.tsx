@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useAtom } from "jotai";
+import { searchQueryAtom } from "@/store/atoms";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -57,9 +60,15 @@ const itemVariants = {
 
 export function LibraryClient({ initialContent }: Props) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useAtom(searchQueryAtom);
   const [filter, setFilter] = useState<string>("all");
   const [sort, setSort] = useState<SortOption>("newest");
+
+  useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    if (q !== search) setSearch(q);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: contentRes, isLoading } = useQuery({
     queryKey: queryKeys.content({ limit: 100 }),
@@ -67,9 +76,8 @@ export function LibraryClient({ initialContent }: Props) {
     initialData: initialContent ?? undefined,
   });
 
-  const contents = contentRes?.data ?? [];
-
   const filtered = useMemo(() => {
+    const contents = contentRes?.data ?? [];
     let items = [...contents];
 
     if (filter !== "all") {
@@ -104,7 +112,7 @@ export function LibraryClient({ initialContent }: Props) {
     }
 
     return items;
-  }, [contents, search, filter, sort]);
+  }, [contentRes?.data, search, filter, sort]);
 
   const invalidateContent = () => {
     queryClient.invalidateQueries({ queryKey: ["content"] });

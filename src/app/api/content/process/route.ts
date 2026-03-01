@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { db } from "@/lib/db";
 import { requireContentOwner } from "@/lib/auth";
-import { checkCredits } from "@/lib/credits";
+import { checkCredits, incrementCredits } from "@/lib/credits";
 import { processContent } from "@/lib/content-processor";
 import { createPlaceholderSummary, scheduleSummaryGeneration } from "@/lib/summarize";
 import { apiError } from "@/lib/api-utils";
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (updated.status === "COMPLETED") {
+      await incrementCredits(user.id);
       await createPlaceholderSummary(updated.id);
       scheduleSummaryGeneration(updated.id);
     }

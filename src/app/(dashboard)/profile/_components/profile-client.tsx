@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -23,10 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import type { AuthUser } from "@/lib/queries";
+import { useUploadThing } from "@/lib/uploadthing";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowRight,
   Calendar,
   Camera,
   Crown,
@@ -36,9 +39,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
 
 interface Props {
   initialUser: AuthUser | null;
@@ -69,18 +71,56 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
   const {
     user,
     loading: authLoading,
+    logout,
     refetch,
   } = useAuth(initialUser ?? undefined);
   const [name, setName] = useState(initialUser?.name ?? "");
+  const [deleting, setDeleting] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const next = user?.name ?? "";
     if (next === name) return;
     const id = requestAnimationFrame(() => setName(next));
     return () => cancelAnimationFrame(id);
-  }, [user?.name]);
+  }, [user?.name, name]);
 
   const router = useRouter();
+
+  const { startUpload } = useUploadThing("imageUploader", {
+    onClientUploadComplete: async (res) => {
+      if (res?.[0]?.ufsUrl) {
+        await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: res[0].ufsUrl }),
+        });
+        await refetch();
+        toast.success("Profile photo updated");
+      }
+      setUploadingImage(false);
+    },
+    onUploadError: () => {
+      toast.error("Failed to upload image");
+      setUploadingImage(false);
+    },
+  });
+
+  const handleImageUpload = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploadingImage(true);
+      await startUpload([file]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [startUpload]
+  );
 
   const updateProfile = useMutation({
     mutationFn: async (newName: string) => {
@@ -106,6 +146,25 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
     updateProfile.mutate(name.trim());
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/auth/me", { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Account deleted successfully");
+        await logout();
+        router.push("/");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete account");
+      }
+    } catch {
+      toast.error("Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (authLoading && !initialUser) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -123,6 +182,12 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
     day: "numeric",
     year: "numeric",
   });
+
+  const initials = (user.name || "U")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
 
   return (
     <motion.div
@@ -144,17 +209,29 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="relative group">
                 <Avatar className="size-24 text-2xl">
+                  {user.image && <AvatarImage src={user.image} alt={user.name || "Profile"} />}
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {(user.name || "U")
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()}
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
-                <button className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Camera className="size-6 text-white" />
+                <button
+                  onClick={handleImageUpload}
+                  disabled={uploadingImage}
+                  className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  {uploadingImage ? (
+                    <Loader2 className="size-6 text-white animate-spin" />
+                  ) : (
+                    <Camera className="size-6 text-white" />
+                  )}
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-3">
@@ -350,11 +427,16 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => router.back()}>
-                      Cancel
-                    </Button>
-                    <Button variant="destructive">
-                      Yes, delete my account
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteAccount}
+                      disabled={deleting}
+                    >
+                      {deleting && <Loader2 className="size-4 animate-spin mr-1" />}
+                      {deleting ? "Deleting..." : "Yes, delete my account"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

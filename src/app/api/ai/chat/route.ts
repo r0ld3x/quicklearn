@@ -11,15 +11,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let body: Record<string, unknown>;
+    interface ChatMessage {
+      role: string;
+      content: string;
+      parts?: Array<{ type: string; text: string }>;
+    }
+
+    let body: { contentId?: string; messages?: ChatMessage[] };
     try {
       body = await req.json();
     } catch {
       return NextResponse.json(
         { error: "Invalid request body" },
-        { status: 400 }
+        { status: 400 },
       );
     }
+
     const { messages, contentId } = body;
 
     if (!contentId) {
@@ -44,8 +51,11 @@ export async function POST(req: NextRequest) {
 
     if (user.plan === "FREE") {
       return NextResponse.json(
-        { error: "Chat with content is available on Pro and Enterprise plans. Please upgrade." },
-        { status: 403 }
+        {
+          error:
+            "Chat with content is available on Pro and Enterprise plans. Please upgrade.",
+        },
+        { status: 403 },
       );
     }
 
@@ -56,14 +66,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const lastUserMessage = messages?.[messages.length - 1];
+    const msgList = messages ?? [];
+    const lastUserMessage = msgList[msgList.length - 1];
     if (lastUserMessage?.role === "user") {
       const msgContent =
         typeof lastUserMessage.content === "string"
           ? lastUserMessage.content
           : lastUserMessage.parts
-              ?.filter((p: { type: string }) => p.type === "text")
-              .map((p: { text: string }) => p.text)
+              ?.filter((p) => p.type === "text")
+              .map((p) => p.text)
               .join("") || "";
 
       if (msgContent) {
@@ -95,12 +106,10 @@ CRITICAL RULES:
 5. For content questions, give a focused, direct answer about that specific topic
 6. Use simple language, be friendly, like a helpful tutor
 7. If the question is off-topic, briefly redirect without being preachy`,
-      messages: (messages || []).map(
-        (m: { role: string; content: string }) => ({
-          role: m.role as "user" | "assistant",
-          content: typeof m.content === "string" ? m.content : "",
-        }),
-      ),
+      messages: msgList.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: typeof m.content === "string" ? m.content : "",
+      })),
       async onFinish({ text }) {
         await db.chatMessage.create({
           data: {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import {
@@ -14,6 +15,7 @@ import {
   Moon,
   Crown,
   Loader2,
+  ArrowRight,
 } from "lucide-react";
 import {
   Card,
@@ -23,7 +25,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -36,12 +37,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight } from "lucide-react";
 
 const container = {
   hidden: { opacity: 0 },
@@ -73,19 +74,27 @@ const planCredits: Record<string, string> = {
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
-  const { user } = useAuth();
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [weeklyDigest, setWeeklyDigest] = useState(false);
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
 
-  const handleChangeEmail = async () => {
-    if (!newEmail) return;
-    setSavingEmail(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setSavingEmail(false);
-    setNewEmail("");
-    toast.success("Verification email sent to your new address");
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/auth/me", { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Account deleted successfully");
+        await logout();
+        router.push("/");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete account");
+      }
+    } catch {
+      toast.error("Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -150,57 +159,42 @@ export default function SettingsPage() {
       </motion.div>
 
       <motion.div variants={item}>
-        <Card>
+        <Card className="opacity-60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="size-5 text-amber-500" />
               Notifications
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 ml-1">
+                Coming Soon
+              </Badge>
             </CardTitle>
             <CardDescription>
-              Configure how you receive notifications
+              Notification preferences will be available soon
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="email-notifs" className="font-medium">
+                <Label className="font-medium text-muted-foreground">
                   Email Notifications
                 </Label>
                 <p className="text-sm text-muted-foreground">
                   Receive updates about your content processing
                 </p>
               </div>
-              <Switch
-                id="email-notifs"
-                checked={emailNotifications}
-                onCheckedChange={(checked) => {
-                  setEmailNotifications(checked);
-                  toast.success(
-                    `Email notifications ${checked ? "enabled" : "disabled"}`
-                  );
-                }}
-              />
+              <Switch disabled checked={false} />
             </div>
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <Label htmlFor="weekly-digest" className="font-medium">
+                <Label className="font-medium text-muted-foreground">
                   Weekly Digest
                 </Label>
                 <p className="text-sm text-muted-foreground">
                   Summary of your weekly learning activity
                 </p>
               </div>
-              <Switch
-                id="weekly-digest"
-                checked={weeklyDigest}
-                onCheckedChange={(checked) => {
-                  setWeeklyDigest(checked);
-                  toast.success(
-                    `Weekly digest ${checked ? "enabled" : "disabled"}`
-                  );
-                }}
-              />
+              <Switch disabled checked={false} />
             </div>
           </CardContent>
         </Card>
@@ -214,27 +208,14 @@ export default function SettingsPage() {
               Account
             </CardTitle>
             <CardDescription>
-              Manage your account details and security
+              Manage your account security
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="change-email">Change Email</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="change-email"
-                  type="email"
-                  placeholder="new@example.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                />
-                <Button onClick={handleChangeEmail} disabled={savingEmail || !newEmail}>
-                  {savingEmail && <Loader2 className="size-4 animate-spin" />}
-                  {savingEmail ? "Sending..." : "Update"}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                A verification link will be sent to your new email
+              <Label className="font-medium">Email</Label>
+              <p className="text-sm text-muted-foreground">
+                {user?.email || "—"}
               </p>
             </div>
             <Separator />
@@ -263,9 +244,16 @@ export default function SettingsPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button variant="outline">Cancel</Button>
-                    <Button variant="destructive">
-                      Delete permanently
+                    <DialogClose asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </DialogClose>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteAccount}
+                      disabled={deleting}
+                    >
+                      {deleting && <Loader2 className="size-4 animate-spin mr-1" />}
+                      {deleting ? "Deleting..." : "Delete permanently"}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

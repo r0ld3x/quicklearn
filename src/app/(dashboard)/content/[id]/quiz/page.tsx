@@ -29,7 +29,14 @@ export default function QuizPage() {
   if (!content) return null;
 
   if (questions) {
-    return <QuizInterface questions={questions} />;
+    const quizQuestions = questions.map((q, i) => ({
+      id: `q-${i}`,
+      question: q.question,
+      options: q.options,
+      correctIndex: q.correctAnswer,
+      explanation: q.explanation,
+    }));
+    return <QuizInterface questions={quizQuestions} />;
   }
 
   const handleGenerate = async () => {

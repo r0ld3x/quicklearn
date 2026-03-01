@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Trophy,
   Target,
-  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,7 +44,7 @@ export function QuizInterface({ questions }: QuizInterfaceProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [showResults, setShowResults] = useState(false);
-  const [answers, setAnswers] = useState<(number | null)[]>(
+  const [, setAnswers] = useState<(number | null)[]>(
     new Array(questions.length).fill(null)
   );
 

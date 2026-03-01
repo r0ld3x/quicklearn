@@ -1,16 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
-import {
-  CreditCard,
-  TrendingUp,
-  Users,
-  IndianRupee,
-  Search,
-  Loader2,
-} from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -18,9 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -28,8 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatDistanceToNow } from "date-fns";
-
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  CreditCard,
+  IndianRupee,
+  Loader2,
+  Search,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 interface SubscriptionItem {
   id: string;
   plan: string;
@@ -85,10 +83,10 @@ export default function AdminSubscriptionsPage() {
     },
   });
 
-  const subscriptions = data?.data ?? [];
   const summary = data?.summary;
 
   const filtered = useMemo(() => {
+    const subscriptions = data?.data ?? [];
     return subscriptions.filter((sub) => {
       const matchesSearch =
         (sub.user.name || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -96,16 +94,41 @@ export default function AdminSubscriptionsPage() {
       const matchesPlan = planFilter === "all" || sub.plan === planFilter;
       return matchesSearch && matchesPlan;
     });
-  }, [subscriptions, search, planFilter]);
+  }, [data?.data, search, planFilter]);
 
   const proCount = summary?.byPlan.find((p) => p.plan === "PRO")?.count ?? 0;
-  const entCount = summary?.byPlan.find((p) => p.plan === "ENTERPRISE")?.count ?? 0;
+  const entCount =
+    summary?.byPlan.find((p) => p.plan === "ENTERPRISE")?.count ?? 0;
 
   const summaryCards = [
-    { label: "Total Active", value: summary?.totalActive ?? 0, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
-    { label: "Pro Subscribers", value: proCount, icon: CreditCard, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { label: "Enterprise", value: entCount, icon: TrendingUp, color: "text-purple-500", bg: "bg-purple-500/10" },
-    { label: "Total Revenue", value: `₹${(summary?.totalRevenue ?? 0).toLocaleString()}`, icon: IndianRupee, color: "text-amber-500", bg: "bg-amber-500/10" },
+    {
+      label: "Total Active",
+      value: summary?.totalActive ?? 0,
+      icon: Users,
+      color: "text-blue-500",
+      bg: "bg-blue-500/10",
+    },
+    {
+      label: "Pro Subscribers",
+      value: proCount,
+      icon: CreditCard,
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+    },
+    {
+      label: "Enterprise",
+      value: entCount,
+      icon: TrendingUp,
+      color: "text-purple-500",
+      bg: "bg-purple-500/10",
+    },
+    {
+      label: "Total Revenue",
+      value: `₹${(summary?.totalRevenue ?? 0).toLocaleString()}`,
+      icon: IndianRupee,
+      color: "text-amber-500",
+      bg: "bg-amber-500/10",
+    },
   ];
 
   if (isLoading) {
@@ -134,9 +157,13 @@ export default function AdminSubscriptionsPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold tracking-tight">
-                      {typeof card.value === "number" ? card.value.toLocaleString() : card.value}
+                      {typeof card.value === "number"
+                        ? card.value.toLocaleString()
+                        : card.value}
                     </p>
-                    <p className="text-xs text-muted-foreground">{card.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {card.label}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -181,46 +208,81 @@ export default function AdminSubscriptionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Subscriber</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Plan</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden md:table-cell">Amount</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden lg:table-cell">Start Date</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden lg:table-cell">End Date</th>
-                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+                      Subscriber
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+                      Plan
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden md:table-cell">
+                      Amount
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden lg:table-cell">
+                      Start Date
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground hidden lg:table-cell">
+                      End Date
+                    </th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">
+                      Status
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((sub) => (
-                    <tr key={sub.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={sub.id}
+                      className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                    >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <Avatar size="sm">
                             <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                              {(sub.user.name || "U").split(" ").map((n) => n[0]).join("").toUpperCase()}
+                              {(sub.user.name || "U")
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{sub.user.name || "Unnamed"}</p>
-                            <p className="text-xs text-muted-foreground">{sub.user.email}</p>
+                            <p className="font-medium">
+                              {sub.user.name || "Unnamed"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {sub.user.email}
+                            </p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={planColors[sub.plan] || ""}>{sub.plan}</Badge>
+                        <Badge className={planColors[sub.plan] || ""}>
+                          {sub.plan}
+                        </Badge>
                       </td>
                       <td className="py-3 px-4 font-medium hidden md:table-cell">
                         ₹{sub.amount.toLocaleString()}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell">
-                        {new Date(sub.startDate).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
+                        {new Date(sub.startDate).toLocaleDateString("en-IN", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell">
                         {sub.endDate
-                          ? new Date(sub.endDate).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })
+                          ? new Date(sub.endDate).toLocaleDateString("en-IN", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
                           : "—"}
                       </td>
                       <td className="py-3 px-4">
-                        <Badge className={statusColors[sub.status] || ""}>{sub.status}</Badge>
+                        <Badge className={statusColors[sub.status] || ""}>
+                          {sub.status}
+                        </Badge>
                       </td>
                     </tr>
                   ))}
@@ -229,7 +291,9 @@ export default function AdminSubscriptionsPage() {
             </div>
             {filtered.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
-                {subscriptions.length === 0 ? "No subscriptions yet." : "No subscriptions found matching your filters."}
+                {filtered.length === 0
+                  ? "No subscriptions yet."
+                  : "No subscriptions found matching your filters."}
               </div>
             )}
           </CardContent>

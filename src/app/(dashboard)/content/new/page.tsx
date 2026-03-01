@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, Suspense } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,12 +24,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const tabConfig = [
-  { value: "pdf", label: "PDF / PPT", icon: FileText, color: "text-red-500" },
-  { value: "link", label: "Web Link", icon: LinkIcon, color: "text-blue-500" },
+  { value: "pdf", label: "PDF / PPT", icon: FileText, color: "text-red-500", comingSoon: false },
+  { value: "link", label: "Web Link", icon: LinkIcon, color: "text-blue-500", comingSoon: false },
+  { value: "youtube", label: "YouTube", icon: Youtube, color: "text-red-600", comingSoon: true },
+  { value: "audio", label: "Audio", icon: Headphones, color: "text-purple-500", comingSoon: true },
 ];
 
 const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)[\w-]+/;
@@ -68,7 +72,7 @@ function NewContentPageInner() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
-  const [currentStep, setCurrentStep] = useState(0);
+  const [, setCurrentStep] = useState(0);
   const [stepStatuses, setStepStatuses] = useState<("pending" | "active" | "done" | "error")[]>([
     "pending", "pending", "pending", "pending",
   ]);
@@ -206,7 +210,7 @@ function NewContentPageInner() {
 
       if (!processRes.ok) {
         updateStep(2, "error");
-        const errData = await processRes.json().catch(() => ({}));
+        await processRes.json().catch(() => ({}));
         toast.warning("Content created but text extraction failed. You can retry from the content page.");
         queryClient.invalidateQueries({ queryKey: ["content"] });
         router.push(`/content/${content.id}`);
@@ -253,14 +257,28 @@ function NewContentPageInner() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={(v) => {
+        const tab = tabConfig.find((t) => t.value === v);
+        if (tab?.comingSoon) return;
+        setActiveTab(v);
+      }}>
         <TabsList className="w-full">
           {tabConfig.map((tab) => {
             const Icon = tab.icon;
             return (
-              <TabsTrigger key={tab.value} value={tab.value} className="flex-1 gap-1.5">
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                disabled={tab.comingSoon}
+                className={cn("flex-1 gap-1.5", tab.comingSoon && "opacity-50 cursor-not-allowed")}
+              >
                 <Icon className={cn("size-4", tab.color)} />
                 <span className="hidden sm:inline">{tab.label}</span>
+                {tab.comingSoon && (
+                  <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 ml-1 hidden sm:inline-flex">
+                    Soon
+                  </Badge>
+                )}
               </TabsTrigger>
             );
           })}
@@ -366,9 +384,11 @@ function NewContentPageInner() {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden rounded-lg border"
                   >
-                    <img
+                    <Image
                       src={thumbnail}
                       alt="Video thumbnail"
+                      width={640}
+                      height={360}
                       className="w-full aspect-video object-cover"
                     />
                   </motion.div>

@@ -139,8 +139,12 @@ async function markdownToRichHtml(md: string): Promise<string> {
   renderer.codespan = ({ text }: { text: string }) => {
     return `<code class="inline-code">${text}</code>`;
   };
-  renderer.table = ({ header, body }: { header: string; body: string }) => {
-    return `<table class="pdf-table"><thead>${header}</thead><tbody>${body}</tbody></table>`;
+  renderer.table = (token: { header: { text: string }[]; rows: { text: string }[][] }) => {
+    const headCells = token.header.map((c) => `<th>${escapeHtml(c.text)}</th>`).join("");
+    const bodyRows = token.rows
+      .map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c.text)}</td>`).join("")}</tr>`)
+      .join("");
+    return `<table class="pdf-table"><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   };
   return await marked.parse(md, { renderer });
 }

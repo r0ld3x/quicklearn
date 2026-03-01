@@ -22,10 +22,8 @@ import {
   Layers,
   Link as LinkIcon,
   Loader2,
-  Mic,
   Sparkles,
   Upload,
-  Youtube,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -69,7 +67,7 @@ function AnimatedCounter({
     let start = 0;
     const end = value;
     if (end === 0) {
-      setCount(0);
+      queueMicrotask(() => setCount(0));
       return;
     }
     const increment = end / (duration * 60);

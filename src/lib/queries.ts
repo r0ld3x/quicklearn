@@ -1,3 +1,5 @@
+import type { ContentType, ContentStatus } from "@/types";
+
 export const queryKeys = {
   auth: ["auth", "me"] as const,
   content: (params?: Record<string, string | number>) =>
@@ -20,10 +22,10 @@ export interface AuthUser {
 
 export interface ContentItem {
   id: string;
-  type: "PDF" | "YOUTUBE" | "AUDIO" | "LINK";
+  type: ContentType;
   title: string;
   description: string | null;
-  status: "PROCESSING" | "COMPLETED" | "FAILED";
+  status: ContentStatus;
   createdAt: string;
   hasSummary: boolean;
   _count?: { flashcards: number; chatMessages: number };

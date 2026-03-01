@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { FeedbackStatus, FeedbackType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { apiError } from "@/lib/api-utils";
@@ -20,12 +21,12 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
     const skip = (page - 1) * limit;
 
-    const where: { status?: string; type?: string } = {};
+    const where: { status?: FeedbackStatus; type?: FeedbackType } = {};
     if (status && ["PENDING", "REVIEWED", "RESOLVED"].includes(status)) {
-      where.status = status;
+      where.status = status as FeedbackStatus;
     }
     if (type && ["BUG", "FEATURE", "GENERAL"].includes(type)) {
-      where.type = type;
+      where.type = type as FeedbackType;
     }
 
     const [feedbacks, total] = await Promise.all([

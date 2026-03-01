@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -27,6 +26,8 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useAtom } from "jotai";
+import { mobileNavOpenAtom } from "@/store/atoms";
 
 const mainNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -42,7 +43,7 @@ const bottomNavItems = [
 ];
 
 export function MobileNav() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useAtom(mobileNavOpenAtom);
   const pathname = usePathname();
   const { user } = useAuth();
 

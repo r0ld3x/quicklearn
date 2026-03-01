@@ -29,7 +29,8 @@ import {
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useAtom } from "jotai";
+import { sidebarCollapsedAtom } from "@/store/atoms";
 
 const mainNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -50,7 +51,7 @@ const sidebarVariants = {
 };
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useAtom(sidebarCollapsedAtom);
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
