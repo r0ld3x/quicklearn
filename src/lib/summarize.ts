@@ -7,9 +7,9 @@ import { SUMMARY_PLACEHOLDER_MARKDOWN, SUMMARY_FAILED_MARKDOWN } from "@/lib/con
 
 export { SUMMARY_PLACEHOLDER_MARKDOWN as PLACEHOLDER_MARKDOWN };
 
-const CHUNK_SIZE = 12_000;
-const CHUNK_OVERLAP = 1_500;
-const MAX_CONCURRENCY = 3;
+const CHUNK_SIZE = 24_000;
+const CHUNK_OVERLAP = 500;
+const MAX_CONCURRENCY = 5;
 
 function chunkText(text: string): string[] {
   if (text.length <= CHUNK_SIZE) return [text];
@@ -75,19 +75,14 @@ async function runWithConcurrency<T>(
   return results;
 }
 
-const CHUNK_SYSTEM_PROMPT = `You are an educational content summarizer. You will receive a SECTION of a larger document.
+const CHUNK_SYSTEM_PROMPT = `You are an educational content summarizer. Produce structured markdown study notes for the given section.
 
-Your job:
-- Produce detailed, structured markdown study notes for THIS section only
-- Use ## headings for major topics, ### for subtopics
-- Use **bold** for key terms and definitions
-- Use bullet points, numbered lists, and examples
-- Be thorough — cover every topic in the section
-- Include specific details, numbers, formulas, and examples from the text
-- Write at least 300 words per major topic
-
-Do NOT add an overall title, overview, or key takeaways — those will be added later when all sections are merged.
-Output only the section study notes in clean markdown.`;
+Rules:
+- Use ## headings, ### for subtopics, **bold** for key terms
+- Bullet points and numbered lists for clarity
+- Cover every topic with specific details, numbers, formulas, examples
+- Do NOT add a title, overview, or key takeaways — those come later in the merge step
+- Output ONLY the section notes in clean markdown`;
 
 const MERGE_SYSTEM_PROMPT = `You are an elite educational content summarizer used by top students. You will receive multiple section summaries from a larger document. Your job is to MERGE them into ONE cohesive, detailed set of study notes.
 
@@ -224,7 +219,7 @@ async function summarizeChunked(extractedText: string) {
     (chunk, i) => () =>
       generateText({
         model: model(),
-        maxOutputTokens: 4000,
+        maxOutputTokens: 2500,
         system: CHUNK_SYSTEM_PROMPT,
         prompt: `This is section ${i + 1} of ${chunks.length} from a larger document. Produce detailed study notes for this section:\n\n${chunk}`,
       }).then((r) => r.text)
@@ -253,7 +248,7 @@ export async function runSummarizationInBackground(
     });
     if (!content?.extractedText) return;
 
-    const useChunked = content.extractedText.length > CHUNK_SIZE;
+    const useChunked = content.extractedText.length > CHUNK_SIZE * 1.5;
     const { markdown, keyTopics } = useChunked
       ? await summarizeChunked(content.extractedText)
       : await summarizeSingle(content.extractedText);
