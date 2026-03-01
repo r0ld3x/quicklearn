@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { AdminLayoutClient } from "./_components/admin-layout-client";
 
 export default async function AdminLayout({

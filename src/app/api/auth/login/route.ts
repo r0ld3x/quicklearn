@@ -1,20 +1,30 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { setOtp } from "@/lib/redis";
+import { setOtp, checkOtpSendLimit } from "@/lib/redis";
 import { sendOtpEmail } from "@/lib/email";
+import crypto from "crypto";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
 
 function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 999999).toString();
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const parsed = loginSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -25,6 +35,16 @@ export async function POST(req: Request) {
     }
 
     const { email } = parsed.data;
+
+    const rateCheck = await checkOtpSendLimit(email);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many requests. Please try again in ${rateCheck.retryAfterSeconds} seconds.`,
+        },
+        { status: 429 }
+      );
+    }
 
     const user = await db.user.findUnique({ where: { email } });
     if (!user) {

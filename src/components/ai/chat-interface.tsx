@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
@@ -263,6 +264,7 @@ export function ChatInterface({ contentId, contentTitle, savedMessages = [] }: C
                     message.content ? (
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeHighlight]}
                         components={{
                           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                           strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
@@ -270,7 +272,24 @@ export function ChatInterface({ contentId, contentTitle, savedMessages = [] }: C
                           ul: ({ children }) => <ul className="my-2 ml-4 space-y-1 list-disc">{children}</ul>,
                           ol: ({ children }) => <ol className="my-2 ml-4 space-y-1 list-decimal">{children}</ol>,
                           li: ({ children }) => <li className="text-sm">{children}</li>,
-                          code: ({ children }) => <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                          code: ({ className, children }) => {
+                            const isInline = !className;
+                            if (isInline) {
+                              return <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">{children}</code>;
+                            }
+                            return <code className={cn("text-xs", className)}>{children}</code>;
+                          },
+                          pre: ({ children }) => (
+                            <pre className="hljs border border-border rounded-lg p-3 overflow-x-auto my-2 text-xs">{children}</pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto rounded-lg border border-border my-2">
+                              <table className="w-full text-xs">{children}</table>
+                            </div>
+                          ),
+                          thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+                          th: ({ children }) => <th className="px-3 py-1.5 text-left font-semibold text-xs border-b border-border">{children}</th>,
+                          td: ({ children }) => <td className="px-3 py-1.5 text-xs border-b border-border/50">{children}</td>,
                           blockquote: ({ children }) => <blockquote className="border-l-2 border-primary/40 pl-3 my-2 text-muted-foreground">{children}</blockquote>,
                           a: ({ children, href }) => <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>,
                         }}

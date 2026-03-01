@@ -62,10 +62,7 @@ export async function GET() {
       recentUsers,
     });
   } catch (error) {
-    console.error("[ADMIN_STATS]", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch stats";
-    const status = message.includes("required") ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const { apiError } = await import("@/lib/api-utils");
+    return apiError("[ADMIN_STATS]", error, "Failed to fetch stats");
   }
 }

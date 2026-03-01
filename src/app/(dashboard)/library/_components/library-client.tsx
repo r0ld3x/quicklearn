@@ -29,6 +29,7 @@ import { ContentCard } from "@/components/content/content-card";
 import { cn } from "@/lib/utils";
 import { ContentType } from "@/types";
 import { queryKeys, fetchContent, type ContentResponse } from "@/lib/queries";
+import { toast } from "sonner";
 
 interface Props {
   initialContent: ContentResponse | null;
@@ -105,14 +106,27 @@ export function LibraryClient({ initialContent }: Props) {
     return items;
   }, [contents, search, filter, sort]);
 
+  const invalidateContent = () => {
+    queryClient.invalidateQueries({ queryKey: ["content"] });
+  };
+
+  const handleRegenerate = () => {
+    invalidateContent();
+    queryClient.invalidateQueries({ queryKey: queryKeys.auth });
+  };
+
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/content?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/content/${id}`, { method: "DELETE" });
       if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ["content"] });
+        invalidateContent();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to delete content");
       }
     } catch (err) {
       console.error("[LIBRARY_DELETE]", err);
+      toast.error("Failed to delete content");
     }
   };
 
@@ -241,7 +255,12 @@ export function LibraryClient({ initialContent }: Props) {
           <AnimatePresence>
             {filtered.map((content) => (
               <motion.div key={content.id} variants={itemVariants} layout>
-                <ContentCard content={content} onDelete={handleDelete} />
+                <ContentCard
+                  content={content}
+                  onDelete={handleDelete}
+                  onEditTitle={invalidateContent}
+                  onRegenerate={handleRegenerate}
+                />
               </motion.div>
             ))}
           </AnimatePresence>

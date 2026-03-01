@@ -45,11 +45,46 @@ export async function getSession() {
     include: { user: true },
   });
 
-  if (!session || session.expiresAt < new Date()) {
+  if (!session) return null;
+
+  if (session.expiresAt < new Date()) {
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
     return null;
   }
 
+  await checkAndDowngradeExpiredSubscription(session.user.id, session.user.plan);
+
   return session.user;
+}
+
+async function checkAndDowngradeExpiredSubscription(
+  userId: string,
+  currentPlan: string
+): Promise<void> {
+  if (currentPlan === "FREE") return;
+
+  // Only downgrade when there is an ACTIVE subscription that has expired (endDate in the past).
+  // Do not downgrade just because there's no subscription (e.g. admin-granted PRO).
+  const expiredSubscriptions = await db.subscription.findMany({
+    where: {
+      userId,
+      status: "ACTIVE",
+      endDate: { lt: new Date() },
+    },
+  });
+
+  if (expiredSubscriptions.length > 0) {
+    await db.$transaction([
+      db.user.update({
+        where: { id: userId },
+        data: { plan: "FREE", credits: 5 },
+      }),
+      db.subscription.updateMany({
+        where: { userId, status: "ACTIVE", endDate: { lt: new Date() } },
+        data: { status: "EXPIRED" },
+      }),
+    ]);
+  }
 }
 
 export async function requireAuth() {
@@ -66,4 +101,22 @@ export async function requireAdmin() {
     throw new Error("Admin access required");
   }
   return user;
+}
+
+export async function requireContentOwner(contentId: string) {
+  const user = await requireAuth();
+
+  const content = await db.content.findUnique({
+    where: { id: contentId },
+  });
+
+  if (!content) {
+    throw new Error("Content not found");
+  }
+
+  if (content.userId !== user.id) {
+    throw new Error("Access denied");
+  }
+
+  return { user, content };
 }

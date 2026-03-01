@@ -37,9 +37,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { ArrowRight } from "lucide-react";
 
 const container = {
   hidden: { opacity: 0 },
@@ -302,9 +304,18 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-              {user?.plan !== "ENTERPRISE" && (
-                <Button variant="outline">Upgrade</Button>
-              )}
+              {user?.plan === "FREE" ? (
+                <Button asChild className="gap-2">
+                  <Link href="/pricing">
+                    Upgrade plan
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              ) : user?.plan !== "ENTERPRISE" ? (
+                <Button variant="outline" asChild>
+                  <Link href="/pricing">Upgrade</Link>
+                </Button>
+              ) : null}
             </div>
           </CardContent>
         </Card>

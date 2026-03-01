@@ -137,6 +137,7 @@ model Content {
   originalFilename String?
   extractedText    String?       @db.Text
   status           ContentStatus @default(PROCESSING)
+  processingError  String?       @db.Text
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 

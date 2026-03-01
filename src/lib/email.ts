@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { SITE_URL } from "@/lib/constants";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -53,7 +54,10 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
                 </tr>
                 <tr>
                   <td style="padding:20px 40px;background-color:#fafafa;border-top:1px solid #f4f4f5;text-align:center;">
-                    <p style="margin:0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} QuickLearn. All rights reserved.</p>
+                    <p style="margin:0;color:#a1a1aa;font-size:12px;">
+                      <a href="${SITE_URL}" style="color:#6366f1;text-decoration:none;">QuickLearn</a> — ${SITE_URL}
+                    </p>
+                    <p style="margin:8px 0 0;color:#a1a1aa;font-size:12px;">&copy; ${new Date().getFullYear()} QuickLearn. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
@@ -64,8 +68,9 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     </html>
   `;
 
+  const from = process.env.MAIL_FROM || "QuickLearn <noreply@quicklearn.me>";
   const { data, error } = await resend.emails.send({
-    from: "QuickLearn <noreply@flashmeet.tech>",
+    from,
     to: email,
     subject: `${code} is your QuickLearn verification code`,
     html,

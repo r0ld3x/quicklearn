@@ -43,10 +43,10 @@ interface AdminStats {
 }
 
 const CHART_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
 ];
 
 const container = {
@@ -176,10 +176,10 @@ export default function AdminDashboard() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
                         borderRadius: "8px",
-                        color: "hsl(var(--foreground))",
+                        color: "var(--foreground)",
                       }}
                     />
                     <Legend />
@@ -220,10 +220,10 @@ export default function AdminDashboard() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
                         borderRadius: "8px",
-                        color: "hsl(var(--foreground))",
+                        color: "var(--foreground)",
                       }}
                     />
                     <Legend />

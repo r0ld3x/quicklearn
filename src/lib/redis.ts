@@ -46,6 +46,8 @@ async function isRedisAvailable(): Promise<boolean> {
 }
 
 const OTP_PREFIX = "otp:";
+const OTP_ATTEMPTS_PREFIX = "otp_attempts:";
+const OTP_SEND_LIMIT_PREFIX = "otp_send:";
 const RATE_LIMIT_PREFIX = "ratelimit:";
 const CREDITS_PREFIX = "credits:";
 
@@ -75,11 +77,72 @@ export async function getOtp(email: string): Promise<string | null> {
 
 export async function deleteOtp(email: string): Promise<void> {
   const key = `${OTP_PREFIX}${email}`;
+  const attemptsKey = `${OTP_ATTEMPTS_PREFIX}${email}`;
   if (await isRedisAvailable()) {
-    await redis!.del(key);
+    await redis!.del(key, attemptsKey);
   } else {
     memoryStore.delete(key);
+    memoryStore.delete(attemptsKey);
   }
+}
+
+export async function incrementOtpAttempts(email: string): Promise<number> {
+  const key = `${OTP_ATTEMPTS_PREFIX}${email}`;
+  const ttl = 300;
+  if (await isRedisAvailable()) {
+    const count = await redis!.incr(key);
+    if (count === 1) await redis!.expire(key, ttl);
+    return count;
+  }
+  cleanExpired();
+  const existing = memoryStore.get(key);
+  const count = existing ? parseInt(existing.value, 10) + 1 : 1;
+  memoryStore.set(key, {
+    value: count.toString(),
+    expiresAt: existing?.expiresAt ?? Date.now() + ttl * 1000,
+  });
+  return count;
+}
+
+export async function getOtpAttempts(email: string): Promise<number> {
+  const key = `${OTP_ATTEMPTS_PREFIX}${email}`;
+  if (await isRedisAvailable()) {
+    const value = await redis!.get(key);
+    return value ? parseInt(value, 10) : 0;
+  }
+  cleanExpired();
+  const entry = memoryStore.get(key);
+  return entry ? parseInt(entry.value, 10) : 0;
+}
+
+export async function checkOtpSendLimit(
+  email: string,
+  maxPerWindow: number = 3,
+  windowSeconds: number = 300
+): Promise<{ allowed: boolean; remaining: number; retryAfterSeconds?: number }> {
+  const key = `${OTP_SEND_LIMIT_PREFIX}${email}`;
+
+  if (await isRedisAvailable()) {
+    const count = await redis!.incr(key);
+    if (count === 1) await redis!.expire(key, windowSeconds);
+    const ttl = await redis!.ttl(key);
+    if (count > maxPerWindow) {
+      return { allowed: false, remaining: 0, retryAfterSeconds: ttl > 0 ? ttl : windowSeconds };
+    }
+    return { allowed: true, remaining: maxPerWindow - count };
+  }
+
+  cleanExpired();
+  const existing = memoryStore.get(key);
+  const count = existing ? parseInt(existing.value, 10) + 1 : 1;
+  const expiresAt = existing?.expiresAt ?? Date.now() + windowSeconds * 1000;
+  memoryStore.set(key, { value: count.toString(), expiresAt });
+
+  if (count > maxPerWindow) {
+    const retryAfterSeconds = Math.ceil((expiresAt - Date.now()) / 1000);
+    return { allowed: false, remaining: 0, retryAfterSeconds };
+  }
+  return { allowed: true, remaining: maxPerWindow - count };
 }
 
 export async function setRateLimit(

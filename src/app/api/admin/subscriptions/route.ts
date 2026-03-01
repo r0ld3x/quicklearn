@@ -58,10 +58,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[ADMIN_SUBSCRIPTIONS]", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch subscriptions";
-    const status = message.includes("required") ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const { apiError } = await import("@/lib/api-utils");
+    return apiError("[ADMIN_SUBSCRIPTIONS]", error, "Failed to fetch subscriptions");
   }
 }

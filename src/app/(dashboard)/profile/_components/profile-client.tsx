@@ -1,17 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { useMutation } from "@tanstack/react-query";
-import {
-  Camera,
-  Calendar,
-  FileText,
-  Sparkles,
-  Crown,
-  AlertTriangle,
-  Loader2,
-} from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -19,11 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,9 +19,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import type { AuthUser } from "@/lib/queries";
+import { useMutation } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  Calendar,
+  Camera,
+  Crown,
+  FileText,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ArrowRight } from "lucide-react";
 
 interface Props {
   initialUser: AuthUser | null;
@@ -63,12 +66,21 @@ const item = {
 };
 
 export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
-  const { user, loading: authLoading, refetch } = useAuth(initialUser ?? undefined);
-  const [name, setName] = useState("");
+  const {
+    user,
+    loading: authLoading,
+    refetch,
+  } = useAuth(initialUser ?? undefined);
+  const [name, setName] = useState(initialUser?.name ?? "");
 
   useEffect(() => {
-    if (user?.name) setName(user.name);
+    const next = user?.name ?? "";
+    if (next === name) return;
+    const id = requestAnimationFrame(() => setName(next));
+    return () => cancelAnimationFrame(id);
   }, [user?.name]);
+
+  const router = useRouter();
 
   const updateProfile = useMutation({
     mutationFn: async (newName: string) => {
@@ -150,9 +162,7 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
                     {user.name || "User"}
                   </h2>
                   <Badge className={planInfo.color}>
-                    {planInfo.icon && (
-                      <planInfo.icon className="size-3 mr-1" />
-                    )}
+                    {planInfo.icon && <planInfo.icon className="size-3 mr-1" />}
                     {planInfo.label}
                   </Badge>
                 </div>
@@ -163,13 +173,37 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
         </Card>
       </motion.div>
 
+      {plan === "FREE" && (
+        <motion.div variants={item}>
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-primary/10">
+                  <Crown className="size-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">Upgrade to Pro</p>
+                  <p className="text-sm text-muted-foreground">
+                    Get more credits, YouTube & audio support, and chat with content.
+                  </p>
+                </div>
+              </div>
+              <Button asChild className="gap-2 shrink-0">
+                <Link href="/pricing">
+                  Upgrade plan
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       <motion.div variants={item}>
         <Card>
           <CardHeader>
             <CardTitle>Edit Profile</CardTitle>
-            <CardDescription>
-              Update your personal information
-            </CardDescription>
+            <CardDescription>Update your personal information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -195,9 +229,7 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
             </div>
             <Button
               onClick={handleSave}
-              disabled={
-                updateProfile.isPending || name.trim() === user.name
-              }
+              disabled={updateProfile.isPending || name.trim() === user.name}
             >
               {updateProfile.isPending && (
                 <Loader2 className="size-4 animate-spin" />
@@ -274,7 +306,11 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
                   </p>
                 </div>
               </div>
-              {plan !== "ENTERPRISE" && <Button>Upgrade Plan</Button>}
+              {plan !== "ENTERPRISE" && (
+                <Button onClick={() => router.push("/pricing")}>
+                  Upgrade Plan
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -314,7 +350,9 @@ export function ProfileClient({ initialUser, initialTotalDocs }: Props) {
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button variant="outline">Cancel</Button>
+                    <Button variant="outline" onClick={() => router.back()}>
+                      Cancel
+                    </Button>
                     <Button variant="destructive">
                       Yes, delete my account
                     </Button>

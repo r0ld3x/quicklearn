@@ -4,7 +4,6 @@ import { useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUploadThing } from "@/lib/uploadthing";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText,
@@ -29,8 +28,6 @@ import { toast } from "sonner";
 
 const tabConfig = [
   { value: "pdf", label: "PDF / PPT", icon: FileText, color: "text-red-500" },
-  { value: "youtube", label: "YouTube Video", icon: Youtube, color: "text-red-600" },
-  { value: "audio", label: "Audio Recording", icon: Headphones, color: "text-purple-500" },
   { value: "link", label: "Web Link", icon: LinkIcon, color: "text-blue-500" },
 ];
 
@@ -59,7 +56,8 @@ function NewContentPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const initialTab = searchParams.get("type") || "pdf";
+  const typeParam = searchParams.get("type");
+  const initialTab = typeParam === "pdf" || typeParam === "link" ? typeParam : "pdf";
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [title, setTitle] = useState("");
@@ -123,9 +121,6 @@ function NewContentPageInner() {
     maxSize: 64 * 1024 * 1024,
   });
 
-  const { startUpload: startPdfUpload } = useUploadThing("pdfUploader");
-  const { startUpload: startAudioUpload } = useUploadThing("audioUploader");
-
   const isYoutubeValid = youtubeUrl ? youtubeRegex.test(youtubeUrl) : true;
   const thumbnail = youtubeUrl && isYoutubeValid ? getYoutubeThumbnail(youtubeUrl) : null;
 
@@ -133,8 +128,6 @@ function NewContentPageInner() {
     if (!title.trim()) return false;
     switch (activeTab) {
       case "pdf": return !!file;
-      case "youtube": return !!youtubeUrl && isYoutubeValid;
-      case "audio": return !!audioFile;
       case "link": return !!linkUrl.trim();
       default: return false;
     }
@@ -147,66 +140,61 @@ function NewContentPageInner() {
     setStepStatuses(["pending", "pending", "pending", "pending"]);
 
     try {
-      let fileUrl: string | undefined;
-      let fileKey: string | undefined;
-      let sourceUrl: string | undefined;
-      let originalFilename: string | undefined;
-      const contentType = activeTab.toUpperCase() as "PDF" | "YOUTUBE" | "AUDIO" | "LINK";
-
-      // Step 1: Upload
-      updateStep(0, "active");
-      setStatusText(activeTab === "pdf" ? "Uploading PDF..." : activeTab === "audio" ? "Uploading audio..." : "Preparing...");
-      setUploadProgress(10);
+      let content: { id: string; status?: string };
+      const contentType = activeTab === "link" ? "LINK" : "PDF";
 
       if (activeTab === "pdf" && file) {
-        const uploadRes = await startPdfUpload([file]);
-        if (!uploadRes || uploadRes.length === 0) throw new Error("PDF upload failed.");
-        fileUrl = uploadRes[0].ufsUrl;
-        fileKey = uploadRes[0].key;
-        originalFilename = file.name;
-      } else if (activeTab === "audio" && audioFile) {
-        const uploadRes = await startAudioUpload([audioFile]);
-        if (!uploadRes || uploadRes.length === 0) throw new Error("Audio upload failed.");
-        fileUrl = uploadRes[0].ufsUrl;
-        fileKey = uploadRes[0].key;
-        originalFilename = audioFile.name;
-      } else if (activeTab === "youtube") {
-        sourceUrl = youtubeUrl;
-      } else if (activeTab === "link") {
-        sourceUrl = linkUrl;
-      }
-
-      updateStep(0, "done");
-      setUploadProgress(30);
-
-      // Step 2: Create record
-      updateStep(1, "active");
-      setStatusText("Saving content...");
-
-      const createRes = await fetch("/api/content", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        updateStep(0, "active");
+        updateStep(1, "active");
+        setStatusText("Uploading PDF...");
+        setUploadProgress(20);
+        const formData = new FormData();
+        formData.set("file", file);
+        formData.set("type", "PDF");
+        if (title.trim()) formData.set("title", title.trim());
+        const uploadRes = await fetch("/api/content/upload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadRes.ok) {
+          updateStep(0, "error");
+          updateStep(1, "error");
+          const errData = await uploadRes.json().catch(() => ({}));
+          toast.error(errData.error || "Upload failed");
+          return;
+        }
+        content = await uploadRes.json();
+        updateStep(0, "done");
+        updateStep(1, "done");
+        setUploadProgress(30);
+      } else {
+        updateStep(0, "active");
+        setStatusText("Preparing...");
+        setUploadProgress(10);
+        const body: { type: string; title?: string; sourceUrl?: string } = {
           type: contentType,
-          title: title.trim(),
-          sourceUrl,
-          fileUrl,
-          fileKey,
-          originalFilename,
-        }),
-      });
-
-      if (!createRes.ok) {
-        updateStep(1, "error");
-        const errData = await createRes.json();
-        throw new Error(errData.error || "Failed to create content");
+          title: title.trim() || undefined,
+        };
+        body.sourceUrl = linkUrl;
+        const createRes = await fetch("/api/content", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!createRes.ok) {
+          updateStep(0, "error");
+          const errData = await createRes.json().catch(() => ({}));
+          toast.error(errData.error || "Failed to create content");
+          return;
+        }
+        content = await createRes.json();
+        updateStep(0, "done");
+        setUploadProgress(30);
       }
 
-      const content = await createRes.json();
-      updateStep(1, "done");
-      setUploadProgress(50);
+      setUploadProgress(40);
 
-      // Step 3: Extract text
+      // Extract text
       updateStep(2, "active");
       setStatusText("Extracting text from your content...");
 
@@ -218,8 +206,7 @@ function NewContentPageInner() {
 
       if (!processRes.ok) {
         updateStep(2, "error");
-        const errData = await processRes.json();
-        console.error("[PROCESS]", errData.error);
+        const errData = await processRes.json().catch(() => ({}));
         toast.warning("Content created but text extraction failed. You can retry from the content page.");
         queryClient.invalidateQueries({ queryKey: ["content"] });
         router.push(`/content/${content.id}`);
@@ -230,7 +217,7 @@ function NewContentPageInner() {
       updateStep(2, "done");
       setUploadProgress(70);
 
-      if (!processedContent.extractedText) {
+      if (processedContent.status !== "COMPLETED") {
         updateStep(3, "error");
         toast.warning("No text could be extracted. You can retry from the content page.");
         queryClient.invalidateQueries({ queryKey: ["content"] });
@@ -238,31 +225,11 @@ function NewContentPageInner() {
         return;
       }
 
-      // Step 4: AI Summary
       updateStep(3, "active");
-      setStatusText("AI is generating your summary...");
-
-      await new Promise((r) => setTimeout(r, 500));
-
-      const summarizeRes = await fetch("/api/ai/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentId: content.id }),
-      });
-
+      setStatusText("Summary will generate on the next page...");
       setUploadProgress(100);
-
-      if (!summarizeRes.ok) {
-        updateStep(3, "error");
-        const errText = await summarizeRes.text();
-        console.error("[AUTO_SUMMARIZE]", errText);
-        toast.success("Content processed! Summary can be generated from the content page.");
-      } else {
-        updateStep(3, "done");
-        toast.success("Content processed and summarized!");
-      }
-
-      setStatusText("Done!");
+      updateStep(3, "done");
+      toast.success("Content processed! Your summary is generating.");
       queryClient.invalidateQueries({ queryKey: ["content"] });
       router.push(`/content/${content.id}`);
     } catch (err) {
@@ -301,10 +268,21 @@ function NewContentPageInner() {
 
         <div className="mt-6 space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">
+              Title
+              {activeTab === "youtube" && (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  (optional – auto-grab from video)
+                </span>
+              )}
+            </Label>
             <Input
               id="title"
-              placeholder="Give your content a title..."
+              placeholder={
+                activeTab === "youtube"
+                  ? "Leave blank to use video title"
+                  : "Give your content a title..."
+              }
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />

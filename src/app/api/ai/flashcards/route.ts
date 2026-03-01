@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { model } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { checkCredits } from "@/lib/credits";
 
 const flashcardsSchema = z.object({
   contentId: z.string().uuid(),
@@ -16,7 +17,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
     const parsed = flashcardsSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -49,6 +58,16 @@ export async function POST(req: NextRequest) {
     if (content.flashcards.length > 0) {
       return NextResponse.json({ flashcards: content.flashcards });
     }
+
+    const creditCheck = await checkCredits(user.id, user.plan);
+    if (!creditCheck.allowed) {
+      return NextResponse.json(
+        { error: creditCheck.error },
+        { status: 429 }
+      );
+    }
+
+    // Credit was consumed when content was processed to COMPLETED; no extra deduction for flashcards.
 
     const sourceText = content.summary?.markdown || content.extractedText;
 
@@ -96,11 +115,6 @@ Guidelines:
         })
       )
     );
-
-    await db.user.update({
-      where: { id: user.id },
-      data: { totalCreditsUsed: { increment: 1 } },
-    });
 
     return NextResponse.json({ flashcards });
   } catch (error) {

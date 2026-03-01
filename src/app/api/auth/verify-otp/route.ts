@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getOtp, deleteOtp } from "@/lib/redis";
+import {
+  getOtp,
+  deleteOtp,
+  incrementOtpAttempts,
+  getOtpAttempts,
+} from "@/lib/redis";
 import { createToken } from "@/lib/auth";
+
+const MAX_OTP_ATTEMPTS = 5;
 
 const verifySchema = z.object({
   email: z.string().email(),
@@ -13,7 +20,16 @@ const verifySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const parsed = verifySchema.safeParse(body);
 
     if (!parsed.success) {
@@ -25,6 +41,18 @@ export async function POST(req: Request) {
 
     const { email, code, name } = parsed.data;
 
+    const attempts = await getOtpAttempts(email);
+    if (attempts >= MAX_OTP_ATTEMPTS) {
+      await deleteOtp(email);
+      return NextResponse.json(
+        {
+          error:
+            "Too many failed attempts. Please request a new verification code.",
+        },
+        { status: 429 }
+      );
+    }
+
     const storedOtp = await getOtp(email);
     if (!storedOtp) {
       return NextResponse.json(
@@ -34,8 +62,12 @@ export async function POST(req: Request) {
     }
 
     if (storedOtp !== code) {
+      await incrementOtpAttempts(email);
+      const remaining = MAX_OTP_ATTEMPTS - attempts - 1;
       return NextResponse.json(
-        { error: "Invalid verification code" },
+        {
+          error: `Invalid verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
+        },
         { status: 400 }
       );
     }
@@ -51,8 +83,16 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
+
+      const isFirstUser = (await db.user.count()) === 0;
+
       user = await db.user.create({
-        data: { email, name, emailVerified: true },
+        data: {
+          email,
+          name,
+          emailVerified: true,
+          role: isFirstUser ? "ADMIN" : "USER",
+        },
       });
     } else if (!user.emailVerified) {
       user = await db.user.update({

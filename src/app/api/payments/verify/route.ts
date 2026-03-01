@@ -16,7 +16,15 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
 
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
     const parsed = verifySchema.safeParse(body);
 
     if (!parsed.success) {
@@ -91,10 +99,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[PAYMENT_VERIFY]", error);
-    const message =
-      error instanceof Error ? error.message : "Payment verification failed";
-    const status = message.includes("required") ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const { apiError } = await import("@/lib/api-utils");
+    return apiError("[PAYMENT_VERIFY]", error, "Payment verification failed");
   }
 }

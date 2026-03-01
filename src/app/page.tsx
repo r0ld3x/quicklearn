@@ -27,11 +27,9 @@ import {
   Upload,
   Sparkles,
   BookOpen,
-  Twitter,
-  Github,
-  Linkedin,
   ChevronRight,
   Quote,
+  LayoutDashboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -199,15 +197,8 @@ const testimonials = [
 const navLinks = [
   { label: "Features", href: "#features" },
   { label: "How It Works", href: "#how-it-works" },
-  { label: "Pricing", href: "#pricing" },
+  { label: "Pricing", href: "/pricing" },
 ];
-
-const footerLinks = {
-  Product: ["Features", "Pricing", "Integrations", "Changelog"],
-  Company: ["About", "Blog", "Careers", "Contact"],
-  Resources: ["Documentation", "Help Center", "API Reference", "Status"],
-  Legal: ["Privacy Policy", "Terms of Service", "Cookie Policy"],
-};
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
@@ -237,7 +228,23 @@ export default function Home() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const { scrollY } = useScroll();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled) requestAnimationFrame(() => setIsLoggedIn(!!data?.user));
+      })
+      .catch(() => {
+        if (!cancelled) requestAnimationFrame(() => setIsLoggedIn(false));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const heroY = useTransform(scrollY, [0, 600], [0, 200]);
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
 
@@ -255,15 +262,18 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    setParticles(
-      Array.from({ length: 50 }, () => ({
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: Math.random() * 3 + 1,
-        duration: Math.random() * 5 + 4,
-        delay: Math.random() * 5,
-      }))
-    );
+    const id = requestAnimationFrame(() => {
+      setParticles(
+        Array.from({ length: 50 }, () => ({
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          size: Math.random() * 3 + 1,
+          duration: Math.random() * 5 + 4,
+          delay: Math.random() * 5,
+        }))
+      );
+    });
+    return () => cancelAnimationFrame(id);
   }, []);
 
   return (
@@ -307,18 +317,33 @@ export default function Home() {
               <Button variant="ghost" size="icon-sm" className="text-gray-400 hover:text-white">
                 <Moon className="size-4" />
               </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login" className="text-gray-300 hover:text-white">
-                  Log In
-                </Link>
-              </Button>
-              <Button
-                size="sm"
-                asChild
-                className="border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500"
-              >
-                <Link href="/signup">Sign Up</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button
+                  size="sm"
+                  asChild
+                  className="border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500"
+                >
+                  <Link href="/dashboard" className="gap-2">
+                    <LayoutDashboard className="size-4" />
+                    Dashboard
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/login" className="text-gray-300 hover:text-white">
+                      Log In
+                    </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    asChild
+                    className="border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500"
+                  >
+                    <Link href="/signup">Sign Up</Link>
+                  </Button>
+                </>
+              )}
             </div>
 
             <button
@@ -351,16 +376,31 @@ export default function Home() {
                   </a>
                 ))}
                 <div className="flex gap-3 pt-3">
-                  <Button variant="outline" size="sm" asChild className="flex-1 border-white/20 text-gray-300">
-                    <Link href="/login">Log In</Link>
-                  </Button>
-                  <Button
-                    size="sm"
-                    asChild
-                    className="flex-1 border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white"
-                  >
-                    <Link href="/signup">Sign Up</Link>
-                  </Button>
+                  {isLoggedIn ? (
+                    <Button
+                      size="sm"
+                      asChild
+                      className="flex-1 border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white"
+                    >
+                      <Link href="/dashboard" className="gap-2">
+                        <LayoutDashboard className="size-4" />
+                        Dashboard
+                      </Link>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="outline" size="sm" asChild className="flex-1 border-white/20 text-gray-300">
+                        <Link href="/login">Log In</Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        asChild
+                        className="flex-1 border-0 bg-linear-to-r from-blue-600 to-purple-600 text-white"
+                      >
+                        <Link href="/signup">Sign Up</Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -926,66 +966,46 @@ export default function Home() {
 
       {/* ── Footer ── */}
       <footer className="border-t border-white/6 bg-[#030712]">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-6">
-            <div className="lg:col-span-2">
-              <Link href="/" className="flex items-center gap-2.5">
-                <Zap className="size-6 text-blue-400" />
-                <span className="bg-linear-to-r from-blue-400 to-purple-400 bg-clip-text text-xl font-bold text-transparent">
-                  QuickLearn
-                </span>
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Zap className="size-6 text-blue-400" />
+              <span className="bg-linear-to-r from-blue-400 to-purple-400 bg-clip-text text-xl font-bold text-transparent">
+                QuickLearn
+              </span>
+            </Link>
+            <nav className="flex flex-wrap items-center justify-center gap-6 text-sm">
+              <a href="#features" className="text-gray-500 transition-colors hover:text-white">
+                Features
+              </a>
+              <a href="#how-it-works" className="text-gray-500 transition-colors hover:text-white">
+                How It Works
+              </a>
+              <Link href="/pricing" className="text-gray-500 transition-colors hover:text-white">
+                Pricing
               </Link>
-              <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-500">
-                Transform any content into structured knowledge with AI-powered
-                learning tools.
-              </p>
-              <div className="mt-6 flex gap-3">
-                {[
-                  { icon: Twitter, label: "Twitter" },
-                  { icon: Github, label: "GitHub" },
-                  { icon: Linkedin, label: "LinkedIn" },
-                ].map((social) => (
-                  <a
-                    key={social.label}
-                    href="#"
-                    aria-label={social.label}
-                    className="flex size-9 items-center justify-center rounded-lg border border-white/6 text-gray-500 transition-colors hover:border-white/12 hover:text-white"
-                  >
-                    <social.icon className="size-4" />
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category}>
-                <h4 className="mb-4 text-sm font-semibold text-white">{category}</h4>
-                <ul className="space-y-2.5">
-                  {links.map((link) => (
-                    <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-gray-500 transition-colors hover:text-gray-300"
-                      >
-                        {link}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              {isLoggedIn ? (
+                <Link href="/dashboard" className="text-gray-500 transition-colors hover:text-white">
+                  Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="text-gray-500 transition-colors hover:text-white">
+                    Log In
+                  </Link>
+                  <Link href="/signup" className="text-gray-500 transition-colors hover:text-white">
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </nav>
           </div>
-
-          <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/6 pt-8 sm:flex-row">
-            <p className="text-sm text-gray-600">
-              &copy; {new Date().getFullYear()} QuickLearn. All rights reserved.
-            </p>
-            <div className="flex gap-6 text-sm text-gray-600">
-              <a href="#" className="hover:text-gray-400">Privacy</a>
-              <a href="#" className="hover:text-gray-400">Terms</a>
-              <a href="#" className="hover:text-gray-400">Cookies</a>
-            </div>
-          </div>
+          <p className="mt-8 border-t border-white/6 pt-8 text-center text-sm text-gray-600">
+            &copy; {new Date().getFullYear()} QuickLearn. All rights reserved.{" "}
+            <Link href="/privacy" className="hover:text-gray-400">Privacy</Link>
+            {" · "}
+            <Link href="/terms" className="hover:text-gray-400">Terms</Link>
+          </p>
         </div>
       </footer>
     </div>

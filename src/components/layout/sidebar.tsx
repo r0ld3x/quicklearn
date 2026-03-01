@@ -1,35 +1,35 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { useTheme } from "next-themes";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Zap,
-  LayoutDashboard,
-  PlusCircle,
-  Library,
-  Trophy,
-  User,
-  Settings,
-  MessageSquareHeart,
-  ChevronsLeft,
-  ChevronsRight,
-  Sun,
-  Moon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  LayoutDashboard,
+  Library,
+  MessageSquareHeart,
+  Moon,
+  PlusCircle,
+  Settings,
+  Sun,
+  Trophy,
+  User,
+  Zap,
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const mainNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -54,7 +54,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
-
+  const router = useRouter();
   return (
     <motion.aside
       initial={false}
@@ -63,7 +63,10 @@ export function Sidebar() {
       transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
       className="hidden md:flex flex-col h-screen bg-sidebar border-r border-sidebar-border relative z-30"
     >
-      <div className="flex items-center gap-2.5 px-4 h-16 shrink-0">
+      <div
+        className="flex items-center gap-2.5 px-4 h-16 shrink-0 cursor-pointer"
+        onClick={() => router.push("/dashboard")}
+      >
         <div className="flex items-center justify-center size-9 rounded-lg bg-primary/10 shrink-0">
           <Zap className="size-5 text-primary" />
         </div>
@@ -121,7 +124,7 @@ export function Sidebar() {
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className={cn(
                 "text-muted-foreground hover:text-sidebar-foreground",
-                collapsed ? "mx-auto" : "w-full justify-start gap-2"
+                collapsed ? "mx-auto" : "w-full justify-start gap-2",
               )}
             >
               <Sun className="size-4 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
@@ -148,7 +151,7 @@ export function Sidebar() {
         <div
           className={cn(
             "flex items-center gap-3 rounded-lg p-2 bg-sidebar-accent/50",
-            collapsed && "justify-center p-1.5"
+            collapsed && "justify-center p-1.5",
           )}
         >
           <Avatar size="sm">
@@ -209,7 +212,11 @@ function NavItem({
   isActive,
   collapsed,
 }: {
-  item: { label: string; href: string; icon: React.ComponentType<{ className?: string }> };
+  item: {
+    label: string;
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+  };
   isActive: boolean;
   collapsed: boolean;
 }) {
@@ -225,7 +232,7 @@ function NavItem({
         collapsed ? "mx-auto" : "w-full justify-start gap-3",
         isActive
           ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-          : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent",
       )}
     >
       <Link href={item.href}>

@@ -1,5 +1,21 @@
 import { YoutubeTranscript } from "youtube-transcript";
 
+/**
+ * Fetches the video title from YouTube via oEmbed (no API key required).
+ */
+export async function getYoutubeVideoTitle(url: string): Promise<string> {
+  const videoId = getYoutubeVideoId(url);
+  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+  const res = await fetch(oembedUrl, {
+    headers: {
+      "User-Agent": "QuickLearn/1.0 (https://www.quicklearn.me)",
+    },
+  });
+  if (!res.ok) return `YouTube video ${videoId}`;
+  const data = (await res.json()) as { title?: string };
+  return data.title?.trim() || `YouTube video ${videoId}`;
+}
+
 export function getYoutubeVideoId(url: string): string {
   const patterns = [
     /(?:youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/,

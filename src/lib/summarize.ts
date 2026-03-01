@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod/v4";
+import "server-only";
 import { generateText } from "ai";
-import { model } from "@/lib/ai";
+import { after } from "next/server";
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { PLAN_FEATURES } from "@/lib/constants";
+import { model } from "@/lib/ai";
+import { SUMMARY_PLACEHOLDER_MARKDOWN, SUMMARY_FAILED_MARKDOWN } from "@/lib/constants";
 
-export const maxDuration = 120;
-
-const summarizeSchema = z.object({
-  contentId: z.string().uuid(),
-});
+export { SUMMARY_PLACEHOLDER_MARKDOWN as PLACEHOLDER_MARKDOWN };
 
 const CHUNK_SIZE = 12_000;
 const CHUNK_OVERLAP = 1_500;
@@ -18,13 +13,14 @@ const MAX_CONCURRENCY = 3;
 
 function chunkText(text: string): string[] {
   if (text.length <= CHUNK_SIZE) return [text];
-
   const sections: string[] = [];
   const sectionSplits = text.split(/\n{2,}/);
-
   let current = "";
   for (const section of sectionSplits) {
-    if (current.length + section.length + 2 > CHUNK_SIZE && current.length > 0) {
+    if (
+      current.length + section.length + 2 > CHUNK_SIZE &&
+      current.length > 0
+    ) {
       sections.push(current.trim());
       const overlapStart = Math.max(0, current.length - CHUNK_OVERLAP);
       current = current.slice(overlapStart) + "\n\n" + section;
@@ -32,23 +28,15 @@ function chunkText(text: string): string[] {
       current += (current ? "\n\n" : "") + section;
     }
   }
-  if (current.trim()) {
-    sections.push(current.trim());
-  }
-
+  if (current.trim()) sections.push(current.trim());
   if (sections.length === 1 && sections[0].length > CHUNK_SIZE) {
     return chunkBySize(sections[0]);
   }
-
   const finalChunks: string[] = [];
   for (const s of sections) {
-    if (s.length > CHUNK_SIZE) {
-      finalChunks.push(...chunkBySize(s));
-    } else {
-      finalChunks.push(s);
-    }
+    if (s.length > CHUNK_SIZE) finalChunks.push(...chunkBySize(s));
+    else finalChunks.push(s);
   }
-
   return finalChunks;
 }
 
@@ -61,9 +49,7 @@ function chunkBySize(text: string): string[] {
       const lastPeriod = text.lastIndexOf(". ", end);
       const lastNewline = text.lastIndexOf("\n", end);
       const breakPoint = Math.max(lastPeriod, lastNewline);
-      if (breakPoint > start + CHUNK_SIZE * 0.5) {
-        end = breakPoint + 1;
-      }
+      if (breakPoint > start + CHUNK_SIZE * 0.5) end = breakPoint + 1;
     }
     chunks.push(text.slice(start, end).trim());
     start = Math.max(start + 1, end - CHUNK_OVERLAP);
@@ -77,18 +63,15 @@ async function runWithConcurrency<T>(
 ): Promise<T[]> {
   const results: T[] = new Array(tasks.length);
   let nextIndex = 0;
-
   async function runNext(): Promise<void> {
     while (nextIndex < tasks.length) {
       const idx = nextIndex++;
       results[idx] = await tasks[idx]();
     }
   }
-
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () =>
-    runNext()
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, () => runNext())
   );
-  await Promise.all(workers);
   return results;
 }
 
@@ -174,9 +157,6 @@ Write detailed, thorough explanations for each major topic. Use:
 - Real examples and analogies where helpful
 - At least 3-5 paragraphs per major section
 
-## [Section Title for major topic 2]
-(Same level of detail as above)
-
 (Continue for ALL major topics — do NOT skip or abbreviate)
 
 ## 📊 Comparison Table
@@ -212,7 +192,6 @@ function extractTopicsAndMarkdown(text: string): {
 } {
   let markdown = text;
   let keyTopics: string[] = [];
-
   const topicsMatch = text.match(
     /\|\|\|TOPICS\|\|\|([\s\S]*?)\|\|\|TOPICS\|\|\|/
   );
@@ -226,7 +205,6 @@ function extractTopicsAndMarkdown(text: string): {
       keyTopics = [];
     }
   }
-
   return { markdown, keyTopics };
 }
 
@@ -242,7 +220,6 @@ async function summarizeSingle(extractedText: string) {
 
 async function summarizeChunked(extractedText: string) {
   const chunks = chunkText(extractedText);
-
   const chunkTasks = chunks.map(
     (chunk, i) => () =>
       generateText({
@@ -252,116 +229,89 @@ async function summarizeChunked(extractedText: string) {
         prompt: `This is section ${i + 1} of ${chunks.length} from a larger document. Produce detailed study notes for this section:\n\n${chunk}`,
       }).then((r) => r.text)
   );
-
   const chunkSummaries = await runWithConcurrency(chunkTasks, MAX_CONCURRENCY);
-
   const mergedInput = chunkSummaries
     .map((s, i) => `--- Section ${i + 1} of ${chunkSummaries.length} ---\n${s}`)
     .join("\n\n");
-
   const { text } = await generateText({
     model: model(),
     maxOutputTokens: 8000,
     system: MERGE_SYSTEM_PROMPT,
     prompt: `Merge the following section summaries into one cohesive, comprehensive set of study notes. Deduplicate overlapping content but preserve all unique details:\n\n${mergedInput}`,
   });
-
   return extractTopicsAndMarkdown(text);
 }
 
-export async function POST(req: NextRequest) {
+/** Runs in background via after(); continues even if the client disconnects. */
+export async function runSummarizationInBackground(
+  contentId: string
+): Promise<void> {
   try {
-    const user = await getSession();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const parsed = summarizeSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Invalid input", details: parsed.error.issues },
-        { status: 400 }
-      );
-    }
-
     const content = await db.content.findUnique({
-      where: { id: parsed.data.contentId },
-      include: { summary: true },
+      where: { id: contentId },
+      select: { id: true, extractedText: true },
     });
-
-    if (!content) {
-      return NextResponse.json({ error: "Content not found" }, { status: 404 });
-    }
-
-    if (content.userId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    if (!content.extractedText) {
-      return NextResponse.json(
-        { error: "Content has not been processed yet" },
-        { status: 400 }
-      );
-    }
-
-    if (content.summary) {
-      return NextResponse.json(content.summary);
-    }
-
-    const planFeatures = PLAN_FEATURES[user.plan as keyof typeof PLAN_FEATURES];
-    const maxCredits = planFeatures.maxCreditsPerDay;
-
-    if (maxCredits !== Infinity) {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const creditsUsedToday = await db.content.count({
-        where: {
-          userId: user.id,
-          status: "COMPLETED",
-          updatedAt: { gte: todayStart },
-        },
-      });
-
-      if (creditsUsedToday >= maxCredits) {
-        return NextResponse.json(
-          { error: "Daily credit limit reached. Upgrade your plan for more." },
-          { status: 429 }
-        );
-      }
-    }
+    if (!content?.extractedText) return;
 
     const useChunked = content.extractedText.length > CHUNK_SIZE;
     const { markdown, keyTopics } = useChunked
       ? await summarizeChunked(content.extractedText)
       : await summarizeSingle(content.extractedText);
 
-    const summary = await db.summary.create({
-      data: {
-        contentId: content.id,
-        markdown,
-        keyTopics,
-      },
+    const stillExists = await db.content.findUnique({
+      where: { id: contentId },
+      select: { id: true },
     });
+    if (!stillExists) return;
 
-    await db.$transaction([
-      db.content.update({
-        where: { id: content.id },
-        data: { status: "COMPLETED" },
-      }),
-      db.user.update({
-        where: { id: user.id },
-        data: { totalCreditsUsed: { increment: 1 } },
-      }),
-    ]);
-
-    return NextResponse.json(summary);
-  } catch (error) {
-    console.error("[AI_SUMMARIZE]", error);
-    const message =
-      error instanceof Error ? error.message : "Summarization failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const existing = await db.summary.findUnique({
+      where: { contentId },
+      select: { id: true },
+    });
+    if (existing) {
+      await db.summary.update({
+        where: { contentId },
+        data: { markdown, keyTopics },
+      });
+    } else {
+      await db.summary.create({
+        data: { contentId, markdown, keyTopics },
+      });
+    }
+    await db.content.update({
+      where: { id: contentId },
+      data: { status: "COMPLETED" },
+    });
+  } catch (err) {
+    console.error("[SUMMARIZE_BACKGROUND]", err);
+    try {
+      const existing = await db.summary.findUnique({
+        where: { contentId },
+        select: { id: true },
+      });
+      if (existing) {
+        await db.summary.update({
+          where: { contentId },
+          data: { markdown: SUMMARY_FAILED_MARKDOWN, keyTopics: [] },
+        });
+      }
+    } catch (updateErr) {
+      console.error("[SUMMARIZE_BACKGROUND_UPDATE]", updateErr);
+    }
   }
+}
+
+export async function createPlaceholderSummary(contentId: string): Promise<void> {
+  await db.summary.create({
+    data: {
+      contentId,
+      markdown: SUMMARY_PLACEHOLDER_MARKDOWN,
+      keyTopics: [],
+    },
+  });
+}
+
+/** Schedules background summarization (call after createPlaceholderSummary). */
+export function scheduleSummaryGeneration(contentId: string): void {
+  after(() => runSummarizationInBackground(contentId));
 }

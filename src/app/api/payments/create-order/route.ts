@@ -13,7 +13,15 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireAuth();
 
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
     const parsed = createOrderSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -47,10 +55,7 @@ export async function POST(req: NextRequest) {
       userId: user.id,
     });
   } catch (error) {
-    console.error("[PAYMENT_CREATE_ORDER]", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to create order";
-    const status = message.includes("required") ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const { apiError } = await import("@/lib/api-utils");
+    return apiError("[PAYMENT_CREATE_ORDER]", error, "Failed to create order");
   }
 }

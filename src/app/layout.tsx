@@ -14,6 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.quicklearn.me"),
   title: {
     default: "QuickLearn - AI-Powered Learning Platform",
     template: "%s | QuickLearn",
@@ -38,6 +39,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "QuickLearn",
+    url: "https://www.quicklearn.me",
     title: "QuickLearn - AI-Powered Learning Platform",
     description:
       "Master any topic faster with AI-powered summaries, quizzes, and personalized learning paths.",

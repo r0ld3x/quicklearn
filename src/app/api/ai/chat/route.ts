@@ -11,7 +11,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
     const { messages, contentId } = body;
 
     if (!contentId) {
@@ -32,6 +40,13 @@ export async function POST(req: NextRequest) {
 
     if (content.userId !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (user.plan === "FREE") {
+      return NextResponse.json(
+        { error: "Chat with content is available on Pro and Enterprise plans. Please upgrade." },
+        { status: 403 }
+      );
     }
 
     if (!content.extractedText) {

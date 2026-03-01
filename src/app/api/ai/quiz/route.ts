@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { model } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { checkCredits } from "@/lib/credits";
 
 const quizSchema = z.object({
   contentId: z.string().uuid(),
@@ -17,7 +18,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
     const parsed = quizSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -48,6 +57,16 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const creditCheck = await checkCredits(user.id, user.plan);
+    if (!creditCheck.allowed) {
+      return NextResponse.json(
+        { error: creditCheck.error },
+        { status: 429 }
+      );
+    }
+
+    // Credit was consumed when content was processed to COMPLETED; no extra deduction for quiz.
 
     const sourceText = content.summary?.markdown || content.extractedText;
 
