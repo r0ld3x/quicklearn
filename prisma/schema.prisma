@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum ContentType {
+  PDF
+  YOUTUBE
+  AUDIO
+  LINK
+}
+
+enum ContentStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum FeedbackType {
+  BUG
+  FEATURE
+  GENERAL
+}
+
+enum FeedbackStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}
+
+model User {
+  id               String         @id @default(uuid()) @db.Uuid
+  name             String?
+  email            String         @unique
+  emailVerified    Boolean        @default(false)
+  image            String?
+  role             UserRole       @default(USER)
+  plan             PlanType       @default(FREE)
+  credits          Int            @default(5)
+  totalCreditsUsed Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  sessions      Session[]
+  contents      Content[]
+  chatMessages  ChatMessage[]
+  subscriptions Subscription[]
+  feedbacks     Feedback[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model OtpCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, code])
+}
+
+model Subscription {
+  id                      String             @id @default(uuid()) @db.Uuid
+  userId                  String             @db.Uuid
+  plan                    PlanType
+  status                  SubscriptionStatus @default(ACTIVE)
+  razorpaySubscriptionId  String?
+  razorpayPaymentId       String?
+  amount                  Int
+  currency                String             @default("INR")
+  startDate               DateTime
+  endDate                 DateTime?
+  createdAt               DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([razorpaySubscriptionId])
+}
+
+model Content {
+  id               String        @id @default(uuid()) @db.Uuid
+  userId           String        @db.Uuid
+  type             ContentType
+  title            String
+  description      String?
+  sourceUrl        String?
+  fileUrl          String?
+  fileKey          String?
+  originalFilename String?
+  extractedText    String?       @db.Text
+  status           ContentStatus @default(PROCESSING)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  summary      Summary?
+  flashcards   Flashcard[]
+  chatMessages ChatMessage[]
+  qnaItems     QnaItem[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+}
+
+model Summary {
+  id        String   @id @default(uuid()) @db.Uuid
+  contentId String   @unique @db.Uuid
+  markdown  String   @db.Text
+  keyTopics String[]
+  createdAt DateTime @default(now())
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+model Flashcard {
+  id         String     @id @default(uuid()) @db.Uuid
+  contentId  String     @db.Uuid
+  question   String
+  answer     String
+  difficulty Difficulty @default(MEDIUM)
+  order      Int
+  createdAt  DateTime   @default(now())
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid()) @db.Uuid
+  contentId String      @db.Uuid
+  userId    String      @db.Uuid
+  role      MessageRole
+  content   String      @db.Text
+  createdAt DateTime    @default(now())
+
+  contentRef Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+  @@index([userId])
+}
+
+model QnaItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  contentId String   @db.Uuid
+  question  String
+  answer    String   @db.Text
+  order     Int
+  createdAt DateTime @default(now())
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([contentId])
+}
+
+model Feedback {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  type      FeedbackType
+  subject   String
+  message   String         @db.Text
+  status    FeedbackStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}

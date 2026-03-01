@@ -1,0 +1,367 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod/v4";
+import { generateText } from "ai";
+import { model } from "@/lib/ai";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { PLAN_FEATURES } from "@/lib/constants";
+
+export const maxDuration = 120;
+
+const summarizeSchema = z.object({
+  contentId: z.string().uuid(),
+});
+
+const CHUNK_SIZE = 12_000;
+const CHUNK_OVERLAP = 1_500;
+const MAX_CONCURRENCY = 3;
+
+function chunkText(text: string): string[] {
+  if (text.length <= CHUNK_SIZE) return [text];
+
+  const sections: string[] = [];
+  const sectionSplits = text.split(/\n{2,}/);
+
+  let current = "";
+  for (const section of sectionSplits) {
+    if (current.length + section.length + 2 > CHUNK_SIZE && current.length > 0) {
+      sections.push(current.trim());
+      const overlapStart = Math.max(0, current.length - CHUNK_OVERLAP);
+      current = current.slice(overlapStart) + "\n\n" + section;
+    } else {
+      current += (current ? "\n\n" : "") + section;
+    }
+  }
+  if (current.trim()) {
+    sections.push(current.trim());
+  }
+
+  if (sections.length === 1 && sections[0].length > CHUNK_SIZE) {
+    return chunkBySize(sections[0]);
+  }
+
+  const finalChunks: string[] = [];
+  for (const s of sections) {
+    if (s.length > CHUNK_SIZE) {
+      finalChunks.push(...chunkBySize(s));
+    } else {
+      finalChunks.push(s);
+    }
+  }
+
+  return finalChunks;
+}
+
+function chunkBySize(text: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(start + CHUNK_SIZE, text.length);
+    if (end < text.length) {
+      const lastPeriod = text.lastIndexOf(". ", end);
+      const lastNewline = text.lastIndexOf("\n", end);
+      const breakPoint = Math.max(lastPeriod, lastNewline);
+      if (breakPoint > start + CHUNK_SIZE * 0.5) {
+        end = breakPoint + 1;
+      }
+    }
+    chunks.push(text.slice(start, end).trim());
+    start = Math.max(start + 1, end - CHUNK_OVERLAP);
+  }
+  return chunks;
+}
+
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function runNext(): Promise<void> {
+    while (nextIndex < tasks.length) {
+      const idx = nextIndex++;
+      results[idx] = await tasks[idx]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () =>
+    runNext()
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+const CHUNK_SYSTEM_PROMPT = `You are an educational content summarizer. You will receive a SECTION of a larger document.
+
+Your job:
+- Produce detailed, structured markdown study notes for THIS section only
+- Use ## headings for major topics, ### for subtopics
+- Use **bold** for key terms and definitions
+- Use bullet points, numbered lists, and examples
+- Be thorough — cover every topic in the section
+- Include specific details, numbers, formulas, and examples from the text
+- Write at least 300 words per major topic
+
+Do NOT add an overall title, overview, or key takeaways — those will be added later when all sections are merged.
+Output only the section study notes in clean markdown.`;
+
+const MERGE_SYSTEM_PROMPT = `You are an elite educational content summarizer used by top students. You will receive multiple section summaries from a larger document. Your job is to MERGE them into ONE cohesive, detailed set of study notes.
+
+Your output MUST follow this exact structure:
+
+# [Title — clear, descriptive title based on the content]
+
+> A 2-3 sentence overview paragraph that captures the essence of the entire content.
+
+## 📋 Overview
+A clear introduction paragraph explaining what this content covers, who it's for, and why it matters. 3-5 sentences minimum.
+
+## [Section Title for major topic 1]
+Write detailed, thorough explanations for each major topic. Use:
+- **Bold** for key terms and definitions
+- Sub-sections with ### for subtopics
+- Bullet points and numbered lists for clarity
+- Real examples and analogies where helpful
+- At least 3-5 paragraphs per major section
+
+(Continue for ALL major topics from the section summaries — do NOT skip or abbreviate)
+
+## 📊 Comparison Table
+If applicable, include a markdown table comparing key concepts, methods, or categories.
+
+| Concept | Description | Key Feature |
+|---------|-------------|-------------|
+| ... | ... | ... |
+
+## 💡 Key Takeaways
+- Summarize the 8-12 most critical points
+- Each point should be a complete, informative sentence
+- Use **bold** for the key concept in each takeaway
+
+## 🔗 Important Definitions
+List 5-10 key terms with clear definitions using this format:
+- **Term**: Clear, concise definition
+
+CRITICAL RULES:
+- Output MUST be at least 1500 words. Longer is better. Do NOT cut short.
+- Merge overlapping content — deduplicate but don't lose detail
+- Maintain logical flow and order across sections
+- Write as if creating premium study notes that a student would pay for
+- Use emojis sparingly in headings only (📋 💡 📊 🔗 🎯 📌 etc.)
+- Maintain academic rigor while being readable
+- Include specific details, numbers, formulas, and examples
+
+After the full summary, extract the key topics as a JSON array between |||TOPICS||| markers.
+Example: |||TOPICS|||["Machine Learning", "Neural Networks", "Deep Learning"]|||TOPICS|||`;
+
+const SINGLE_SYSTEM_PROMPT = `You are an elite educational content summarizer used by top students. You produce LONG, DETAILED, beautifully structured markdown study notes — not short summaries.
+
+Your output MUST follow this exact structure:
+
+# [Title — clear, descriptive title based on the content]
+
+> A 2-3 sentence overview paragraph that captures the essence of the entire content.
+
+## 📋 Overview
+A clear introduction paragraph explaining what this content covers, who it's for, and why it matters. 3-5 sentences minimum.
+
+## [Section Title for major topic 1]
+Write detailed, thorough explanations for each major topic. Use:
+- **Bold** for key terms and definitions
+- Sub-sections with ### for subtopics
+- Bullet points and numbered lists for clarity
+- Real examples and analogies where helpful
+- At least 3-5 paragraphs per major section
+
+## [Section Title for major topic 2]
+(Same level of detail as above)
+
+(Continue for ALL major topics — do NOT skip or abbreviate)
+
+## 📊 Comparison Table
+If applicable, include a markdown table comparing key concepts, methods, or categories.
+
+| Concept | Description | Key Feature |
+|---------|-------------|-------------|
+| ... | ... | ... |
+
+## 💡 Key Takeaways
+- Summarize the 8-12 most critical points
+- Each point should be a complete, informative sentence
+- Use **bold** for the key concept in each takeaway
+
+## 🔗 Important Definitions
+List 5-10 key terms with clear definitions using this format:
+- **Term**: Clear, concise definition
+
+CRITICAL RULES:
+- Output MUST be at least 1500 words. Longer is better. Do NOT cut short.
+- Cover EVERY topic in the source material — do not skip sections
+- Write as if creating premium study notes that a student would pay for
+- Use emojis sparingly in headings only (📋 💡 📊 🔗 🎯 📌 etc.)
+- Maintain academic rigor while being readable
+- Include specific details, numbers, formulas, and examples from the source
+
+After the full summary, extract the key topics as a JSON array between |||TOPICS||| markers.
+Example: |||TOPICS|||["Machine Learning", "Neural Networks", "Deep Learning"]|||TOPICS|||`;
+
+function extractTopicsAndMarkdown(text: string): {
+  markdown: string;
+  keyTopics: string[];
+} {
+  let markdown = text;
+  let keyTopics: string[] = [];
+
+  const topicsMatch = text.match(
+    /\|\|\|TOPICS\|\|\|([\s\S]*?)\|\|\|TOPICS\|\|\|/
+  );
+  if (topicsMatch?.[1]) {
+    try {
+      keyTopics = JSON.parse(topicsMatch[1].trim());
+      markdown = text
+        .replace(/\|\|\|TOPICS\|\|\|[\s\S]*?\|\|\|TOPICS\|\|\|/, "")
+        .trim();
+    } catch {
+      keyTopics = [];
+    }
+  }
+
+  return { markdown, keyTopics };
+}
+
+async function summarizeSingle(extractedText: string) {
+  const { text } = await generateText({
+    model: model(),
+    maxOutputTokens: 8000,
+    system: SINGLE_SYSTEM_PROMPT,
+    prompt: `Create comprehensive, detailed study notes from the following content. Cover EVERYTHING — do not skip any section or topic:\n\n${extractedText}`,
+  });
+  return extractTopicsAndMarkdown(text);
+}
+
+async function summarizeChunked(extractedText: string) {
+  const chunks = chunkText(extractedText);
+
+  const chunkTasks = chunks.map(
+    (chunk, i) => () =>
+      generateText({
+        model: model(),
+        maxOutputTokens: 4000,
+        system: CHUNK_SYSTEM_PROMPT,
+        prompt: `This is section ${i + 1} of ${chunks.length} from a larger document. Produce detailed study notes for this section:\n\n${chunk}`,
+      }).then((r) => r.text)
+  );
+
+  const chunkSummaries = await runWithConcurrency(chunkTasks, MAX_CONCURRENCY);
+
+  const mergedInput = chunkSummaries
+    .map((s, i) => `--- Section ${i + 1} of ${chunkSummaries.length} ---\n${s}`)
+    .join("\n\n");
+
+  const { text } = await generateText({
+    model: model(),
+    maxOutputTokens: 8000,
+    system: MERGE_SYSTEM_PROMPT,
+    prompt: `Merge the following section summaries into one cohesive, comprehensive set of study notes. Deduplicate overlapping content but preserve all unique details:\n\n${mergedInput}`,
+  });
+
+  return extractTopicsAndMarkdown(text);
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getSession();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const parsed = summarizeSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid input", details: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+
+    const content = await db.content.findUnique({
+      where: { id: parsed.data.contentId },
+      include: { summary: true },
+    });
+
+    if (!content) {
+      return NextResponse.json({ error: "Content not found" }, { status: 404 });
+    }
+
+    if (content.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (!content.extractedText) {
+      return NextResponse.json(
+        { error: "Content has not been processed yet" },
+        { status: 400 }
+      );
+    }
+
+    if (content.summary) {
+      return NextResponse.json(content.summary);
+    }
+
+    const planFeatures = PLAN_FEATURES[user.plan as keyof typeof PLAN_FEATURES];
+    const maxCredits = planFeatures.maxCreditsPerDay;
+
+    if (maxCredits !== Infinity) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const creditsUsedToday = await db.content.count({
+        where: {
+          userId: user.id,
+          status: "COMPLETED",
+          updatedAt: { gte: todayStart },
+        },
+      });
+
+      if (creditsUsedToday >= maxCredits) {
+        return NextResponse.json(
+          { error: "Daily credit limit reached. Upgrade your plan for more." },
+          { status: 429 }
+        );
+      }
+    }
+
+    const useChunked = content.extractedText.length > CHUNK_SIZE;
+    const { markdown, keyTopics } = useChunked
+      ? await summarizeChunked(content.extractedText)
+      : await summarizeSingle(content.extractedText);
+
+    const summary = await db.summary.create({
+      data: {
+        contentId: content.id,
+        markdown,
+        keyTopics,
+      },
+    });
+
+    await db.$transaction([
+      db.content.update({
+        where: { id: content.id },
+        data: { status: "COMPLETED" },
+      }),
+      db.user.update({
+        where: { id: user.id },
+        data: { totalCreditsUsed: { increment: 1 } },
+      }),
+    ]);
+
+    return NextResponse.json(summary);
+  } catch (error) {
+    console.error("[AI_SUMMARIZE]", error);
+    const message =
+      error instanceof Error ? error.message : "Summarization failed";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
