@@ -1,21 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  Menu,
-  Zap,
-  LayoutDashboard,
-  PlusCircle,
-  Library,
-  Trophy,
-  User,
-  Settings,
-  MessageSquareHeart,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -24,10 +11,23 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useAtom } from "jotai";
+import { cn } from "@/lib/utils";
 import { mobileNavOpenAtom } from "@/store/atoms";
+import { useAtom } from "jotai";
+import {
+  LayoutDashboard,
+  Library,
+  Menu,
+  MessageSquareHeart,
+  PlusCircle,
+  Settings,
+  Trophy,
+  User,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const mainNavItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -59,7 +59,10 @@ export function MobileNav() {
           <span className="sr-only">Open menu</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0 bg-sidebar border-sidebar-border">
+      <SheetContent
+        side="left"
+        className="w-72 p-0 bg-sidebar border-sidebar-border"
+      >
         <SheetHeader className="px-4 pt-4 pb-0">
           <SheetTitle className="flex items-center gap-2.5">
             <div className="flex items-center justify-center size-9 rounded-lg bg-primary/10">
@@ -85,7 +88,7 @@ export function MobileNav() {
                   "w-full justify-start gap-3",
                   isActive
                     ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-                    : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                    : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent",
                 )}
               >
                 <Link href={item.href}>
@@ -110,10 +113,10 @@ export function MobileNav() {
                 size="sm"
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "w-full justify-start gap-3",
+                  "w-full justify-start gap-3 cursor-pointer",
                   isActive
                     ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-                    : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                    : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent",
                 )}
               >
                 <Link href={item.href}>
@@ -140,7 +143,10 @@ export function MobileNav() {
                 {user?.email || ""}
               </p>
             </div>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
+            <Badge
+              variant="secondary"
+              className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+            >
               {user?.plan || "FREE"}
             </Badge>
           </div>

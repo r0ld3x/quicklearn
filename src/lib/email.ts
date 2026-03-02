@@ -1,5 +1,5 @@
-import { Resend } from "resend";
 import { SITE_URL } from "@/lib/constants";
+import { Resend } from "resend";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -68,7 +68,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     </html>
   `;
 
-  const from = process.env.MAIL_FROM || "QuickLearn <noreply@quicklearn.me>";
+  const from = process.env.MAIL_FROM || "QuickLearn <noreply@quicklearn.to>";
   const { data, error } = await resend.emails.send({
     from,
     to: email,

@@ -75,107 +75,103 @@ async function runWithConcurrency<T>(
   return results;
 }
 
-const CHUNK_SYSTEM_PROMPT = `You are an educational content summarizer. Produce structured markdown study notes for the given section.
+const CHUNK_SYSTEM_PROMPT = `You are an educational content summarizer that writes concise, dense study notes.
 
 Rules:
 - Use ## headings, ### for subtopics, **bold** for key terms
-- Bullet points and numbered lists for clarity
-- Cover every topic with specific details, numbers, formulas, examples
+- Bullet points for clarity — keep each point to 1-2 sentences max
+- Cover every topic but be brief: facts, numbers, formulas, key examples only
+- No filler sentences, no restating the same idea in different words
 - Do NOT add a title, overview, or key takeaways — those come later in the merge step
 - Output ONLY the section notes in clean markdown`;
 
-const MERGE_SYSTEM_PROMPT = `You are an elite educational content summarizer used by top students. You will receive multiple section summaries from a larger document. Your job is to MERGE them into ONE cohesive, detailed set of study notes.
+const MERGE_SYSTEM_PROMPT = `You are an elite educational content summarizer. Merge the section summaries into ONE concise, well-structured set of study notes. Be BRIEF — no fluff, no verbose definitions, no repeating ideas.
 
 Your output MUST follow this exact structure:
 
-# [Title — clear, descriptive title based on the content]
+# [Title — clear, descriptive title]
 
-> A 2-3 sentence overview paragraph that captures the essence of the entire content.
+> 1-2 sentence overview capturing the essence of the content.
 
 ## 📋 Overview
-A clear introduction paragraph explaining what this content covers, who it's for, and why it matters. 3-5 sentences minimum.
+2-3 sentences: what this covers and why it matters.
 
 ## [Section Title for major topic 1]
-Write detailed, thorough explanations for each major topic. Use:
-- **Bold** for key terms and definitions
-- Sub-sections with ### for subtopics
-- Bullet points and numbered lists for clarity
-- Real examples and analogies where helpful
-- At least 3-5 paragraphs per major section
+Cover each major topic concisely:
+- **Bold** key terms, define them in one short sentence
+- Use ### for subtopics
+- Bullet points — 1-2 sentences each, no padding
+- Include specific numbers, formulas, and key examples
+- Keep each section focused: cover the point and move on
 
-(Continue for ALL major topics from the section summaries — do NOT skip or abbreviate)
+(Continue for ALL topics — cover everything, but keep it tight)
 
 ## 📊 Comparison Table
-If applicable, include a markdown table comparing key concepts, methods, or categories.
+If applicable, a markdown table comparing key concepts.
 
 | Concept | Description | Key Feature |
 |---------|-------------|-------------|
 | ... | ... | ... |
 
 ## 💡 Key Takeaways
-- Summarize the 8-12 most critical points
-- Each point should be a complete, informative sentence
-- Use **bold** for the key concept in each takeaway
+- 5-8 most critical points, one sentence each
+- **Bold** the key concept in each
 
 ## 🔗 Important Definitions
-List 5-10 key terms with clear definitions using this format:
-- **Term**: Clear, concise definition
+- **Term**: One-sentence definition (5-8 terms max)
 
 CRITICAL RULES:
-- Output MUST be at least 1500 words. Longer is better. Do NOT cut short.
-- Merge overlapping content — deduplicate but don't lose detail
-- Maintain logical flow and order across sections
-- Write as if creating premium study notes that a student would pay for
-- Use emojis sparingly in headings only (📋 💡 📊 🔗 🎯 📌 etc.)
-- Maintain academic rigor while being readable
+- Keep total output between 600-1000 words. Be dense, not long.
+- Merge and deduplicate overlapping content
+- Cover EVERY topic but never pad with filler or restate the same idea
+- One short definition per term — no multi-sentence explanations
+- Use emojis sparingly in headings only
 - Include specific details, numbers, formulas, and examples
 
 After the full summary, extract the key topics as a JSON array between |||TOPICS||| markers.
 Example: |||TOPICS|||["Machine Learning", "Neural Networks", "Deep Learning"]|||TOPICS|||`;
 
-const SINGLE_SYSTEM_PROMPT = `You are an elite educational content summarizer used by top students. You produce LONG, DETAILED, beautifully structured markdown study notes — not short summaries.
+const SINGLE_SYSTEM_PROMPT = `You are an elite educational content summarizer. You produce concise, well-structured markdown study notes that cover everything without being verbose.
 
 Your output MUST follow this exact structure:
 
-# [Title — clear, descriptive title based on the content]
+# [Title — clear, descriptive title]
 
-> A 2-3 sentence overview paragraph that captures the essence of the entire content.
+> 1-2 sentence overview capturing the essence of the content.
 
 ## 📋 Overview
-A clear introduction paragraph explaining what this content covers, who it's for, and why it matters. 3-5 sentences minimum.
+2-3 sentences: what this covers and why it matters.
 
 ## [Section Title for major topic 1]
-Write detailed, thorough explanations for each major topic. Use:
-- **Bold** for key terms and definitions
-- Sub-sections with ### for subtopics
-- Bullet points and numbered lists for clarity
-- Real examples and analogies where helpful
-- At least 3-5 paragraphs per major section
+Cover each major topic concisely:
+- **Bold** key terms, define them in one short sentence
+- Use ### for subtopics
+- Bullet points — 1-2 sentences each, no padding
+- Include specific numbers, formulas, and key examples
+- Keep each section focused: cover the point and move on
 
-(Continue for ALL major topics — do NOT skip or abbreviate)
+(Continue for ALL topics — cover everything, but keep it tight)
 
 ## 📊 Comparison Table
-If applicable, include a markdown table comparing key concepts, methods, or categories.
+If applicable, a markdown table comparing key concepts.
 
 | Concept | Description | Key Feature |
 |---------|-------------|-------------|
 | ... | ... | ... |
 
 ## 💡 Key Takeaways
-- Summarize the 8-12 most critical points
-- Each point should be a complete, informative sentence
-- Use **bold** for the key concept in each takeaway
+- 5-8 most critical points, one sentence each
+- **Bold** the key concept in each
 
 ## 🔗 Important Definitions
-List 5-10 key terms with clear definitions using this format:
-- **Term**: Clear, concise definition
+- **Term**: One-sentence definition (5-8 terms max)
 
 CRITICAL RULES:
-- Output MUST be at least 1500 words. Longer is better. Do NOT cut short.
-- Cover EVERY topic in the source material — do not skip sections
-- Write as if creating premium study notes that a student would pay for
-- Use emojis sparingly in headings only (📋 💡 📊 🔗 🎯 📌 etc.)
-- Maintain academic rigor while being readable
+- Keep total output between 600-1000 words. Be dense, not long.
+- Cover EVERY topic in the source material — do not skip anything
+- Never pad with filler or restate the same idea in different words
+- One short definition per term — no multi-sentence explanations
+- Use emojis sparingly in headings only
 - Include specific details, numbers, formulas, and examples from the source
 
 After the full summary, extract the key topics as a JSON array between |||TOPICS||| markers.
@@ -206,9 +202,9 @@ function extractTopicsAndMarkdown(text: string): {
 async function summarizeSingle(extractedText: string) {
   const { text } = await generateText({
     model: model(),
-    maxOutputTokens: 8000,
+    maxOutputTokens: 4000,
     system: SINGLE_SYSTEM_PROMPT,
-    prompt: `Create comprehensive, detailed study notes from the following content. Cover EVERYTHING — do not skip any section or topic:\n\n${extractedText}`,
+    prompt: `Create concise study notes from the following content. Cover every topic but keep it short — no lengthy explanations:\n\n${extractedText}`,
   });
   return extractTopicsAndMarkdown(text);
 }
@@ -219,7 +215,7 @@ async function summarizeChunked(extractedText: string) {
     (chunk, i) => () =>
       generateText({
         model: model(),
-        maxOutputTokens: 2500,
+        maxOutputTokens: 1500,
         system: CHUNK_SYSTEM_PROMPT,
         prompt: `This is section ${i + 1} of ${chunks.length} from a larger document. Produce detailed study notes for this section:\n\n${chunk}`,
       }).then((r) => r.text)
@@ -230,9 +226,9 @@ async function summarizeChunked(extractedText: string) {
     .join("\n\n");
   const { text } = await generateText({
     model: model(),
-    maxOutputTokens: 8000,
+    maxOutputTokens: 4000,
     system: MERGE_SYSTEM_PROMPT,
-    prompt: `Merge the following section summaries into one cohesive, comprehensive set of study notes. Deduplicate overlapping content but preserve all unique details:\n\n${mergedInput}`,
+    prompt: `Merge the following section summaries into one concise set of study notes. Deduplicate overlapping content, keep it short but complete:\n\n${mergedInput}`,
   });
   return extractTopicsAndMarkdown(text);
 }

@@ -8,7 +8,7 @@ export async function getYoutubeVideoTitle(url: string): Promise<string> {
   const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
   const res = await fetch(oembedUrl, {
     headers: {
-      "User-Agent": "QuickLearn/1.0 (https://www.quicklearn.me)",
+      "User-Agent": "QuickLearn/1.0 (https://www.quicklearn.to)",
     },
   });
   if (!res.ok) return `YouTube video ${videoId}`;
@@ -34,7 +34,7 @@ export function getYoutubeVideoId(url: string): string {
 }
 
 export function formatTranscript(
-  items: { text: string; offset: number }[]
+  items: { text: string; offset: number }[],
 ): string {
   return items.map((item) => item.text).join(" ");
 }
@@ -43,6 +43,6 @@ export async function extractYoutubeTranscript(url: string): Promise<string> {
   const videoId = getYoutubeVideoId(url);
   const transcript = await YoutubeTranscript.fetchTranscript(videoId);
   return formatTranscript(
-    transcript.map((item) => ({ text: item.text, offset: item.offset }))
+    transcript.map((item) => ({ text: item.text, offset: item.offset })),
   );
 }

@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Zap, ArrowLeft, Loader2, Mail, User } from "lucide-react";
-import { toast } from "sonner";
+import { OtpInput } from "@/components/auth/otp-input";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -16,7 +9,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { OtpInput } from "@/components/auth/otp-input";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, Loader2, Mail, User, Zap } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import { toast } from "sonner";
 
 const slideVariants = {
   enter: (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
@@ -164,7 +164,7 @@ export default function SignupPage() {
                   type="checkbox"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary cursor-pointer"
                 />
                 <span className="text-sm text-muted-foreground leading-snug">
                   I agree to the{" "}
@@ -172,7 +172,10 @@ export default function SignupPage() {
                     Terms of Service
                   </Link>{" "}
                   and{" "}
-                  <Link href="/privacy" className="text-primary hover:underline">
+                  <Link
+                    href="/privacy"
+                    className="text-primary hover:underline"
+                  >
                     Privacy Policy
                   </Link>
                 </span>

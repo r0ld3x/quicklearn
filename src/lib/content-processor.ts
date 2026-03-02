@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
 import { incrementCredits } from "@/lib/credits";
+import { db } from "@/lib/db";
 import { extractTextFromUrl } from "@/lib/pdf";
 import { extractYoutubeTranscript } from "@/lib/youtube";
 import * as cheerio from "cheerio";
@@ -87,13 +87,16 @@ export async function processContent(contentId: string): Promise<void> {
 
 const LINK_FETCH_TIMEOUT_MS = 15_000;
 const LINK_USER_AGENT =
-  "Mozilla/5.0 (compatible; QuickLearn/1.0; +https://www.quicklearn.me)";
+  "Mozilla/5.0 (compatible; QuickLearn/1.0; +https://www.quicklearn.to)";
 
 async function extractWebContent(url: string): Promise<string> {
   let response: Response;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), LINK_FETCH_TIMEOUT_MS);
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      LINK_FETCH_TIMEOUT_MS,
+    );
     response = await fetch(url, {
       signal: controller.signal,
       headers: { "User-Agent": LINK_USER_AGENT },
@@ -102,18 +105,29 @@ async function extractWebContent(url: string): Promise<string> {
   } catch (err) {
     if (err instanceof Error) {
       if (err.name === "AbortError") {
-        throw new Error("The link took too long to load. Try again or use a faster page.");
+        throw new Error(
+          "The link took too long to load. Try again or use a faster page.",
+        );
       }
-      if (err.cause instanceof Error && /fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(err.cause.message)) {
-        throw new Error("This link could not be reached. Check the URL and your connection.");
+      if (
+        err.cause instanceof Error &&
+        /fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT/i.test(err.cause.message)
+      ) {
+        throw new Error(
+          "This link could not be reached. Check the URL and your connection.",
+        );
       }
     }
-    throw new Error("This link could not be loaded. Check the URL and try again.");
+    throw new Error(
+      "This link could not be loaded. Check the URL and try again.",
+    );
   }
 
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error("Page not found (404). The link may be broken or removed.");
+      throw new Error(
+        "Page not found (404). The link may be broken or removed.",
+      );
     }
     if (response.status === 403) {
       throw new Error("Access denied (403). This page cannot be read.");
@@ -121,10 +135,14 @@ async function extractWebContent(url: string): Promise<string> {
     if (response.status >= 500) {
       throw new Error("The website is having problems. Try again later.");
     }
-    throw new Error(`The link returned an error (${response.status}). Please check the URL.`);
+    throw new Error(
+      `The link returned an error (${response.status}). Please check the URL.`,
+    );
   }
 
-  const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
+  const contentType = (
+    response.headers.get("content-type") ?? ""
+  ).toLowerCase();
 
   if (contentType.includes("application/pdf")) {
     return extractTextFromUrl(url);
@@ -146,7 +164,9 @@ async function extractWebContent(url: string): Promise<string> {
   }
 
   if (!contentType.includes("text/html")) {
-    throw new Error("This link is not a supported page (HTML, PDF, or Markdown). Use a different URL.");
+    throw new Error(
+      "This link is not a supported page (HTML, PDF, or Markdown). Use a different URL.",
+    );
   }
 
   const html = await response.text();
@@ -154,7 +174,13 @@ async function extractWebContent(url: string): Promise<string> {
 
   $("script, style, nav, footer, header, aside, iframe, noscript").remove();
 
-  const selectors = ["article", "main", '[role="main"]', ".content", "#content"];
+  const selectors = [
+    "article",
+    "main",
+    '[role="main"]',
+    ".content",
+    "#content",
+  ];
   let text = "";
 
   for (const selector of selectors) {

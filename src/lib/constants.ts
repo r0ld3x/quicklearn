@@ -3,7 +3,7 @@ export const APP_DESCRIPTION =
   "AI-powered learning platform that transforms any content into interactive study materials.";
 
 /** Canonical site URL for links, metadata, and email. */
-export const SITE_URL = "https://www.quicklearn.me";
+export const SITE_URL = "https://www.quicklearn.to";
 
 export const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
